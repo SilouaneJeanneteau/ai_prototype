@@ -10,8 +10,8 @@ Boid.MAX_SPEED = 100
 Boid.MIN_SPEED = 80
 Boid.ATTRACTION_RADIUS = Boid.radius * 8
 Boid.ATTRACTION_DAMPER = 10
-Boid.AVOID_RADIUS = Boid.radius * 3
-Boid.AVOID_AMPLIFIER = 6
+Boid.AVOID_RADIUS = Boid.radius
+Boid.AVOID_AMPLIFIER = 2
 Boid.ALIGNMENT_RADIUS = Boid.radius * 3
 Boid.ALIGNMENT_DAMPER = 8
 Boid.HUNTING_RADIUS = Boid.radius * 10
@@ -51,20 +51,34 @@ function Boid:new( x, y )
    instance.action_lock = false
    instance.move_type = MOVE_Idle
    instance.movement_direction = Vector:new( 0, 1 )
+   self.velocity_delta = Vector:new( 0, 0 )
 
    return instance
 end
 
-function Boid:Update( dt )
+function Boid:Update( dt, other_boids )
    self:ResolveDecision( dt )
 
    self:ResolveCurrentAction( dt )
 
-   self:ResolvePosition( dt )
+   self:CalculateAvoidanceVelocityVector( other_boids )
 
-   if self.current_position:isNearby( 0.5, self.desired_position ) then
-      --self.move_type = MOVE_Idle
+   self:ResolvePosition( dt )
+end
+
+function Boid:CalculateAvoidanceVelocityVector( boids )
+  local new_avoidance_vector = Vector:new( 0, 0 ) 
+   for _, other in ipairs( boids ) do
+      if self.current_position:isNearby(Boid.AVOID_RADIUS, other.current_position) then
+         local avoid_vector = (self.current_position - other.current_position)
+         local unit_avoid_accel = avoid_vector:norm()
+         local avoid_multiplier = Boid.AVOID_RADIUS * Boid.AVOID_AMPLIFIER / avoid_vector:r()
+         local avoid_accel = unit_avoid_accel * avoid_multiplier
+         new_avoidance_vector = new_avoidance_vector + avoid_accel
+      end
    end
+
+   self.velocity_delta = self.velocity_delta + ( new_avoidance_vector - self.velocity_delta ) * 0.2
 end
 
 function Boid:ResolveDecision( dt )
@@ -239,10 +253,12 @@ function Boid:ResolvePosition( dt )
    if self.move_type == MOVE_Recal then
        movement_direction = ( self.desired_position - self.current_position ):norm()
    else
-       movement_direction = Vector:new( math.cos( self.current_angle ), math.sin( self.current_angle ) )
+       movement_direction = Vector:new( math.cos( self.current_angle ), math.sin( self.current_angle ) ) + self.velocity_delta
    end
 
    self.current_position = self.current_position + movement_direction * self.current_speed
+
+   self.velocity_delta = Vector:new( 0, 0 )
 
    if math.abs( self.current_speed ) > 0.5 then
       self.movement_direction = ( self.current_position - old_position ):norm()

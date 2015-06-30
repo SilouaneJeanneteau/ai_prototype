@@ -84,7 +84,7 @@ function love.update( dt )
 
 	for _, boid_list in ipairs( boid_list_list ) do
 		for _, boid in ipairs( boid_list ) do
-			boid:Update( dt )
+			boid:Update( dt, boid_list )
 		end
 	end
 

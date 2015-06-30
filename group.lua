@@ -261,9 +261,7 @@ function Group:ApplyFormation( index, formation_type )
       elseif distance >= self.last_desired_position_table[ index ].max_distance then
          self.element_table[ index ]:GoTo( desired_position, MOVE_Walk )
       else
-         if self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled then
-            self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled = false
-         else
+         if not self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled then
             self.element_table[ index ]:Stop()
          end
       end
