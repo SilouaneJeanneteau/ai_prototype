@@ -6,7 +6,7 @@ Group =
 }
 
 Group.MIN_DISTANCE_TO_LEADER = 50.0
-Group.MAX_DISTANCE_TO_LEADER = 100.0
+Group.MAX_DISTANCE_TO_LEADER = 80.0
 Group.SINGLE_LINE_MAX_DISTANCE_TO_LEADER = 30.0
 Group.RUN_MAX_DISTANCE_TO_LEADER = 400.0
 Group.MIN_DISTANCE_TO_OTHER = 10.0
@@ -55,6 +55,14 @@ function Group:OnAddElement()
         
         if not self:MoveToSlot( last_index, closest_index, true ) then
             self:MoveToSlot( last_index, closest_index, false )
+        --else
+        --    local current_slot_index = closest_index - 1
+        --    current_slot_index = current_slot_index < 1 and #self.slot_table or current_slot_index
+        --    local slot_to_go = current_slot_index - 1
+        --    slot_to_go = slot_to_go < 1 and #self.slot_table or slot_to_go
+        --    local current_element_index = self.slot_table[ current_slot_index ].element_index
+        --    self.slot_table[ current_slot_index ].element_index = - 1
+        --    self:MoveToSlot( current_element_index, slot_to_go, false )
         end
         
     elseif self.formation_type == FORMATION_SingleLine then
