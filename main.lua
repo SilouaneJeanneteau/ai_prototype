@@ -5,7 +5,7 @@ require 'player'
 require 'region'
 require 'coordinator'
 
-local boid_count = 4
+local boid_count = 6
 local boid_list_list = { {} }
 local bait_list = {}
 local region_list = {}
@@ -53,8 +53,8 @@ function love.draw()
 	coordinator:Draw()
 
 	for _, boid_list in ipairs( boid_list_list ) do
-		for _, boid in ipairs( boid_list ) do
-			boid:draw()
+		for i, boid in ipairs( boid_list ) do
+			boid:draw( i )
 		end
 	end
 
@@ -83,16 +83,14 @@ function love.update( dt )
 	coordinator:UpdateRegion( region_list, dt )
 
 	for _, boid_list in ipairs( boid_list_list ) do
-		for _, boid in ipairs( boid_list ) do
+		for i, boid in ipairs( boid_list ) do
 			boid:Update( dt, boid_list )
+   
+            --print( i .. " " .. ( boid.move_type == MOVE_Idle and "Idle" or boid.move_type == MOVE_Walk and "Walk" or boid.move_type == MOVE_Run and "Run" or "Recal" ) )
 		end
 	end
 
 	player:Update( dt )
-
-	if love.mouse.isDown( "r" ) then
-		table.insert( bait_list, Bait:new( love.mouse.getX(), love.mouse.getY() ) )
-	end
 
 	if love.mouse.isDown( "l" ) then
 	    local group_index = 1

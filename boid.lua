@@ -86,7 +86,7 @@ function Boid:ResolveDecision( dt )
    local delta_y = ( self.desired_position.y - self.current_position.y )
 
    if math.abs( delta_x ) > 0.001 or math.abs( delta_y ) > 0.001 then
-      self.last_input_angle = math.atan2( delta_y, delta_x )
+       self.last_input_angle = math.atan2( delta_y, delta_x )
    end
 
    local delta_angle = WrapAngle( self.last_input_angle - self.sight_angle )
@@ -119,13 +119,19 @@ function Boid:ResolveDecision( dt )
       elseif self.desired_action == ACTION_GoBack then
          if self.current_speed < 1.0 then
             self.current_action = SUB_ACTION_UTurn
+            
+            print( "UTurn" )
          else
             self.drift_angle = self.current_angle
 
             if self.current_speed > -1.0 and self.current_speed < 6.0 then
                self.current_action = SUB_ACTION_DriftUTurn
+               
+               print( "DriftUTurn" )
             else
                self.current_action = SUB_ACTION_BigDriftUTurn
+   
+                print( "BigDriftUTurn" )
             end
          end
 
@@ -297,9 +303,12 @@ function Boid:StopNow()
     self.desired_speed = 0.0
     self.drift_angle = 0.0
     self.drift_timer = 0.0
+    self.uturn_timer = 0.0
+    self.action_lock = true
+    self.current_action = SUB_ACTION_LookFront
 end
 
-function Boid:draw()
+function Boid:draw( i )
    local angle_in_radian = self.sight_angle
    local pawn_size = 25
    local half_pawn_size = pawn_size * 0.5
@@ -319,11 +328,17 @@ function Boid:draw()
    love.graphics.polygon( 'fill', vertices )
 
    love.graphics.origin()
-
+   
    love.graphics.setColor( 255, 0, 0, 255 )
    love.graphics.translate( self.current_position.x, self.current_position.y )
    love.graphics.rotate( angle_in_radian )
    love.graphics.circle( "fill", half_pawn_size, 0, 5, 100 )
+
+   love.graphics.origin()
+   
+   love.graphics.setColor( 0, 0, 0, 255 )
+   love.graphics.translate( self.current_position.x, self.current_position.y )
+   love.graphics.print( i, 0, 0, 0, 2, 2 )
 
    love.graphics.origin()
 end
