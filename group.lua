@@ -82,7 +82,40 @@ function Group:UpdateSearch()
             end
             
             local sorted_element_table = {}
+            ------------------------
+            --local first_sorted_table = {}
+            --local inc = 1
             
+            --for i, _ in ipairs( self.element_table ) do
+            --    if self.element_state_table[ i ] ~= SEARCH_First then
+            --        first_sorted_table[ inc ] = i
+            --        inc = inc + 1
+            --    end
+            --end
+            
+            --table.sort( first_sorted_table, function( a, b ) local a_distance = ( self.element_table[ a ].current_position - closest_slot_position ):r() local b_distance = ( self.element_table[ b ].current_position - closest_slot_position ):r() return a_distance > b_distance end )
+            
+            --local second_sorted_table = {}
+            --local inc = 1
+            --for i, _ in ipairs( self.element_table ) do
+            --    if self.element_state_table[ i ] == SEARCH_First then
+            --        second_sorted_table[ inc ] = i
+            --        inc = inc + 1
+            --    end
+            --end
+            
+            --table.sort( second_sorted_table, function( a, b ) local a_distance = ( self.element_table[ a ].current_position - closest_slot_position ):r() local b_distance = ( self.element_table[ b ].current_position - closest_slot_position ):r() return a_distance > b_distance end )
+            
+            --local inc = 1
+            --for _, index in ipairs( first_sorted_table ) do
+            --    sorted_element_table[ inc ] = index
+            --    inc = inc + 1
+            --end
+            --for _, index in ipairs( second_sorted_table ) do
+            --    sorted_element_table[ inc ] = index
+            --    inc = inc + 1
+            --end
+            ---------------------------OR
             for i, _ in ipairs( self.element_table ) do
                 sorted_element_table[ i ] = i
             end
