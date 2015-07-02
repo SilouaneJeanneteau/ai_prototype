@@ -119,19 +119,13 @@ function Boid:ResolveDecision( dt )
       elseif self.desired_action == ACTION_GoBack then
          if self.current_speed < 1.0 then
             self.current_action = SUB_ACTION_UTurn
-            
-            print( "UTurn" )
          else
             self.drift_angle = self.current_angle
 
             if self.current_speed > -1.0 and self.current_speed < 6.0 then
                self.current_action = SUB_ACTION_DriftUTurn
-               
-               print( "DriftUTurn" )
             else
                self.current_action = SUB_ACTION_BigDriftUTurn
-   
-                print( "BigDriftUTurn" )
             end
          end
 
@@ -146,22 +140,32 @@ function Boid:ResolveCurrentAction( dt )
          self.desired_speed = 0.0
          self.angular_speed_max = 0.07
          self.angular_acceleration = 0.3
-         self.linear_acceleration = 0.03
+         self.linear_acceleration = 0.2 --0.6
+      elseif self.move_type == MOVE_SlowWalk then
+         self.desired_speed = 1.0
+         self.angular_speed_max = 0.1
+         self.angular_acceleration = 0.3
+         self.linear_acceleration = 0.08
       elseif self.move_type == MOVE_Walk then
          self.desired_speed = 3.0
          self.angular_speed_max = 0.1
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.05
+      elseif self.move_type == MOVE_FastWalk then
+         self.desired_speed = 5.0
+         self.angular_speed_max = 0.1
+         self.angular_acceleration = 0.3
+         self.linear_acceleration = 0.02
       elseif self.move_type == MOVE_Run then
          self.desired_speed = 10.0
          self.angular_speed_max = 0.2
          self.angular_acceleration = 0.15
          self.linear_acceleration = 0.01
       elseif self.move_type == MOVE_Recal then
-         self.desired_speed = 0.5
-         self.angular_speed_max = 0.0
-         self.angular_acceleration = 0.0
-         self.linear_acceleration = 0.03
+         self.desired_speed = 1.0
+         self.angular_speed_max = 0.5
+         self.angular_acceleration = 0.3
+         self.linear_acceleration = 0.5
       end
 
       self.desired_angle = self.last_input_angle
@@ -195,7 +199,12 @@ function Boid:ResolveCurrentAction( dt )
          self.angular_speed_max = 0.2
          self.angular_acceleration = 0.1
          self.angle_blend = 0.2
-      elseif self.move_type == MOVE_Walk then
+      elseif self.move_type == MOVE_SlowWalk then
+         self.desired_speed = 0.0
+         self.angular_speed_max = 0.01
+         self.angular_acceleration = 0.2
+         self.angle_blend = 0.2
+      elseif self.move_type == MOVE_Walk or self.move_type == MOVE_FastWalk then
          self.desired_speed = 0.0
          self.angular_speed_max = 0.2
          self.angular_acceleration = 0.2
@@ -206,26 +215,24 @@ function Boid:ResolveCurrentAction( dt )
          self.angular_acceleration = 0.1
          self.angle_blend = 0.2
       elseif self.move_type == MOVE_Recal then
-         self.desired_speed = 0.5
-         self.angular_speed_max = 0.0
-         self.angular_acceleration = 0.0
-         self.linear_acceleration = 0.03
+         self.desired_speed = 1.0
+         self.angular_speed_max = 0.5
+         self.angular_acceleration = 0.3
+         self.linear_acceleration = 0.3
       end
 
-      if self.move_type ~= MOVE_Recal then
-          self.desired_angle = self.last_input_angle
-          self.uturn_timer = self.uturn_timer + dt
+      self.desired_angle = self.last_input_angle
+      self.uturn_timer = self.uturn_timer + dt
 
-          if self.uturn_timer > 0.5 then
-             self.action_lock = false
-             self.uturn_timer = 0.0
-          end
+      if self.uturn_timer > 0.5 then
+         self.action_lock = false
+         self.uturn_timer = 0.0
       end
    end
 end
 
 function Boid:ResolvePosition( dt )
-   if self.move_type ~= MOVE_Recal then
+   if self.move_type ~= MOVE_Idle then
        local current_delta_angle = WrapAngle( self.desired_angle - self.current_angle )
        local abs_current_delta_angle = math.abs( current_delta_angle )
        local angle_speed_dest = 0.0
@@ -304,7 +311,16 @@ function Boid:StopNow()
     self.drift_angle = 0.0
     self.drift_timer = 0.0
     self.uturn_timer = 0.0
-    self.action_lock = true
+    self.current_action = SUB_ACTION_LookFront
+end
+
+function Boid:StopSoftly()
+    self:Stop()
+    self.desired_speed = 0.0
+    self.drift_angle = 0.0
+    self.drift_timer = 0.0
+    self.uturn_timer = 0.0
+    self.linear_acceleration = 1.0
     self.current_action = SUB_ACTION_LookFront
 end
 

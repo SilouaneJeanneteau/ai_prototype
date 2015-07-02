@@ -5,7 +5,7 @@ require 'player'
 require 'region'
 require 'coordinator'
 
-local boid_count = 6
+local boid_count = 1
 local boid_list_list = { {} }
 local bait_list = {}
 local region_list = {}
@@ -83,10 +83,10 @@ function love.update( dt )
 	coordinator:UpdateRegion( region_list, dt )
 
 	for _, boid_list in ipairs( boid_list_list ) do
-		for i, boid in ipairs( boid_list ) do
+		for i, boid in ipairs( boid_list ) do            
 			boid:Update( dt, boid_list )
    
-            --print( i .. " " .. ( boid.move_type == MOVE_Idle and "Idle" or boid.move_type == MOVE_Walk and "Walk" or boid.move_type == MOVE_Run and "Run" or "Recal" ) )
+            print( i .. " " .. ( boid.move_type == MOVE_Idle and "Idle" or boid.move_type == MOVE_FastWalk and "Fast Walk"  or boid.move_type == MOVE_Walk and "Walk" or boid.move_type == MOVE_Run and "Run" or boid.move_type == MOVE_SlowWalk and "Slow Walk" or "Recal" ) )
 		end
 	end
 

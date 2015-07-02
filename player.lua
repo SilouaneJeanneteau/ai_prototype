@@ -209,7 +209,7 @@ function Player:ResolveCurrentAction( dt )
 end
 
 function Player:ResolvePosition( dt )
-   if self.move_type ~= MOVE_Recal then
+   if self.move_type ~= MOVE_Recal and self.move_type ~= MOVE_Idle then
        local current_delta_angle = WrapAngle( self.desired_angle - self.current_angle )
        local abs_current_delta_angle = math.abs( current_delta_angle )
        local angle_speed_dest = 0.0
