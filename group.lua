@@ -19,6 +19,10 @@ Group.MAX_DISTANCE_TO_RECAL = 1.0
 Group.MAX_SLOT_PER_CIRCLE = 8
 Group.CIRCLE_RADIUS = 50.0
 Group.Circle_MAX_DISTANCE = 1 + Group.CIRCLE_RADIUS * 2
+Group.MAX_DISTANCE_TO_GROUPED_MEETING_POINT = 40.0
+Group.SINGLE_LINE_SAMPLE_DISTANCE = 10.0
+Group.LINE_SLOT_MIN_DISTANCE = 100.0
+Group.LINE_SLOT_MIN_INDEX_DISTANCE = 5
 
 function Group:new( table, new_leader )
    local instance = {}
@@ -32,6 +36,10 @@ function Group:new( table, new_leader )
    instance.element_relative_position_table = {}
    instance.last_desired_position_table = {}
    instance.slot_table = {}
+   instance.order_inc = 1
+   instance.last_search_force = Vector:new( 0, 0 )
+   instance.line_following_trail = {}
+   instance.line_slot_order_table = {}
    instance:ResetSearch()
 
    for index = 1, #instance.element_table do
@@ -41,6 +49,9 @@ function Group:new( table, new_leader )
    instance:ApplyOrder()
 
    instance:ChangeFormation( FORMATION_Grouped )
+   
+   instance:ResetSearch()
+   instance:UpdateSearch()
 
    return instance
 end
@@ -58,21 +69,27 @@ function Group:ResetSearch()
 end
 
 function Group:UpdateSearch()
-    local force_sum = Vector:new( 0, 0 )
-    local element_searching_count = 0
+    local it_should_have_force = false
+    local force_sum = Vector:new( 0, 0 )    
+    local element_searching_count = #self.element_state_table
     
-    for i, it_is_searching in ipairs( self.element_state_table ) do
-        if it_is_searching ~= SEARCH_None then
-            element_searching_count = element_searching_count + 1
-            
-            if it_is_searching == SEARCH_First then
-                force_sum = force_sum + ( self.leader.current_position - self.element_table[ i ].current_position ):norm()
+    for i, it_is_searching in ipairs( self.element_state_table ) do        
+        if it_is_searching == SEARCH_First and not self.last_desired_position_table[ self.order_table[ i ] ].it_is_enabled then
+            it_should_have_force = true
+            local element_to_group_center_vector = self.leader.current_position - self.element_table[ i ].current_position
+            if element_to_group_center_vector:r() > Group.CIRCLE_RADIUS then
+                force_sum = force_sum + element_to_group_center_vector:norm()
             end
         end
     end
     
+    if force_sum:r() == 0.0 and it_should_have_force then
+        force_sum = last_search_force
+    end
+    
     if force_sum:r() > 0.0 then
         force_sum = force_sum:norm()
+        last_search_force = force_sum
     
         if self.formation_type == FORMATION_Grouped then
             local force_position = self.leader.current_position + force_sum * Group.CIRCLE_RADIUS
@@ -141,10 +158,12 @@ function Group:UpdateSearch()
                 local closest_slot_index = self:FindClosestFreeSlotInTable( self.element_table[ sorted_index ].current_position, ordered_slot_index_table, element_searching_count )--ordered_slot_index_table[ i ]
                 self.slot_table[ closest_slot_index ].element_index = sorted_index
                 
-                self.element_relative_position_table[ self.order_table[ sorted_index ] ] = self.slot_table[ closest_slot_index ].position * Group.CIRCLE_RADIUS
+                if not self.last_desired_position_table[ self.order_table[ sorted_index ] ].it_is_enabled then
+                    self.element_relative_position_table[ self.order_table[ sorted_index ] ] = self.slot_table[ closest_slot_index ].position * Group.CIRCLE_RADIUS
+                end
             end
         elseif self.formation_type == FORMATION_SingleLine then
-            self.todo.x = 3
+            --self.todo.x = 3
         end
     end
 end
@@ -198,13 +217,7 @@ function Group:FindClosestFreeSlot( position )
 end
 
 function Group:OnAddElement()
-  local last_index = #self.element_table
-    if self.formation_type == FORMATION_Grouped then        
-      self:OnAddElementToGroupedFormation()        
-    elseif self.formation_type == FORMATION_SingleLine then
-      self:OnAddElementToSingleLineFormation()
-    end
-  
+    local last_index = #self.element_table  
     for index = 1, #self.last_desired_position_table do
         self.last_desired_position_table[ index ].must_recal = true
         self.element_state_table[ index ] = self.element_state_table[ index ] == SEARCH_First and SEARCH_First or SEARCH_New
@@ -213,32 +226,10 @@ function Group:OnAddElement()
     self.last_desired_position_table[ last_index ] = { it_is_enabled = false, last_leader_position = Vector:new( 0.0, 0.0 ), last_formation_type = FORMATION_Grouped, max_distance = Group.SLOW_WALK_DISTANCE_THRESHOLD, must_recal = false, recal_max_distance = Group.Circle_MAX_DISTANCE }
     self.order_table[ last_index ] = last_index
     self.element_state_table[ last_index ] = SEARCH_First
-    
-    self:UpdateSearch()
-end
+    self.element_relative_position_table[ last_index ] = self.element_table[ last_index ].current_position
+    self.line_slot_order_table[ last_index ] = { it_follows = true, index = 0 }
 
-function Group:MoveToSlot( element_index, slot_index, it_is_incrementing )
-    if self.slot_table[ slot_index ].element_index == - 1 then
-        self.element_relative_position_table[ element_index ] = self.slot_table[ slot_index ].position * Group.CIRCLE_RADIUS
-        self.slot_table[ slot_index ].element_index = element_index
-        
-        return true
-    else
-        local next_slot_index = ( it_is_incrementing and ( slot_index + 1 ) or ( slot_index - 1 ) )
-        
-        if next_slot_index > 0 and next_slot_index <= #self.slot_table then
-            local next_element_index = self.slot_table[ slot_index ].element_index
-            
-            if self:MoveToSlot( next_element_index, next_slot_index, it_is_incrementing ) then
-                self.element_relative_position_table[ element_index ] = self.slot_table[ slot_index ].position * Group.CIRCLE_RADIUS
-                self.slot_table[ slot_index ].element_index = element_index
-                
-                return true
-            end
-        else
-            return false
-        end
-    end
+    self:UpdateSearch()
 end
 
 function Group:ChangeFormation( formation_type )
@@ -256,18 +247,21 @@ function Group:ChangeFormation( formation_type )
       elseif self.formation_type == FORMATION_SingleLine then
         self:EnterSingleLineFormation()
       end
-
-      self:UpdateSearch()
    end
 end
 
 function Group:Update( dt )
+    if self.formation_type == FORMATION_Grouped then
+    elseif self.formation_type == FORMATION_SingleLine then
+        self:TryToInsertTrailPosition( self.leader.current_position )
+    end
+    
     for i, _ in ipairs( self.element_table ) do
-        self:ApplyFormation( i, self.last_desired_position_table[ self.order_table[ i ] ].it_is_enabled and self.last_desired_position_table[ self.order_table[ i ] ].last_formation_type or self.formation_type )
+        self:ApplyFormation( i, self.last_desired_position_table[ self.order_table[ i ] ].it_is_enabled and self.last_desired_position_table[ self.order_table[ i ] ].last_formation_type or self.formation_type, dt )
     end
 end
 
-function Group:Draw()
+function Group:Draw()    
     if self.formation_type == FORMATION_Grouped then
         for i, slot in ipairs( self.slot_table ) do
            local slot_position
@@ -287,11 +281,20 @@ function Group:Draw()
            if slot.element_index ~= -1 then
                love.graphics.setColor( 0, 0, 0, 255 )
                love.graphics.translate( slot_position.x, slot_position.y )
-               love.graphics.print( self.order_table[ slot.element_index ], 0, 0, 0, 2, 2 )
+               love.graphics.print( slot.element_index, 0, 0, 0, 2, 2 )
 
                love.graphics.origin()
            end
         end
+    end
+    
+    for _, trail in ipairs( self.line_following_trail ) do
+       love.graphics.setColor( 128, 11, 211, 255 )
+       
+       love.graphics.translate( trail.x, trail.y )
+       love.graphics.circle( "fill", 0, 0, 5.0, 100 )
+
+       love.graphics.origin()
     end
     
     for i, element in ipairs( self.element_table ) do
@@ -336,28 +339,64 @@ function Group:UpdateOrder()
    end
 end
 
-function Group:ApplyFormation( index, formation_type )
+function Group:ApplyFormation( index, formation_type, dt )
   if formation_type == FORMATION_Grouped then
-    self:ApplyGroupedFormation( index )
+    self:ApplyGroupedFormation( index, dt )
   elseif formation_type == FORMATION_SingleLine then
-    self:ApplySingleLineFormation( index )
+    self:ApplySingleLineFormation( index, dt )
   end
 end
 
 -- Specific to each formation
 
-function Group:ApplyGroupedFormation( index )
+function Group:ApplyGroupedFormation( index, dt )
+  self:UpdateGroupedFormation( index, dt )
+  
   if self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled then
     local distance = ( self.element_table[ index ].current_position - self.last_desired_position_table[ self.order_table[ index ] ].last_leader_position ):r()
-    if distance <= Group.MAX_DISTANCE_TO_LEADER then
+    if distance <= Group.MAX_DISTANCE_TO_GROUPED_MEETING_POINT then
+      local correct_order_index = -1
+      for order_index = 1, #self.order_table do
+        if self.order_table[ order_index ] == index then
+            correct_order_index = order_index
+            break
+        end
+      end
+      
+      if self.order_inc > 3 then
+        self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled = false
+        return
+      end
+      
+      --local temp_index = self.order_table[ self.order_inc ]
+      --self.order_table[ self.order_inc ] = self.order_table[ correct_order_index ]
+      --self.order_table[ correct_order_index ] = temp_index
+      
+      --local temp_last_desired_position = self.last_desired_position_table[ self.order_inc ]
+      --self.last_desired_position_table[ self.order_inc ] = self.last_desired_position_table[ correct_order_index ]
+      --self.last_desired_position_table[ correct_order_index ] = temp_last_desired_position
+      
+      --local temp_relative_position = self.element_relative_position_table[ self.order_table[ self.order_inc ] ]
+      --self.element_relative_position_table[ self.order_table[ self.order_inc ] ] = self.element_relative_position_table[ self.order_table[ correct_order_index ] ]
+      --self.element_relative_position_table[ self.order_table[ correct_order_index ] ] = temp_relative_position
+      
       self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled = false
+      self.line_slot_order_table[ self.order_table[ index ] ].it_follows = self.order_table[ index ] ~= 1
+      
+      if self.order_inc > 1 then
+        self.element_table[ index ]:Stop()
+        self.element_table[ index ].desired_position = self.element_table[ index ].current_position
+        self.last_desired_position_table[ self.order_table[ index ] ].last_leader_position = self.element_table[ index ].desired_position
+      end
+      
+      self.order_inc = self.order_inc + 1
+      return
     end
   end
   
   if self.last_desired_position_table[ self.order_table[ index ] ].must_recal then
     if ( self.element_table[ index ].current_position - ( self.leader.current_position + self.element_relative_position_table[ self.order_table[ index ] ] ) ):r() <= Group.MAX_DISTANCE_TO_RECAL then
       self.last_desired_position_table[ self.order_table[ index ] ].must_recal = false
-      --self.element_table[ index ].current_position = self.leader.current_position + self.element_relative_position_table[ self.order_table[ index ] ]
       self.element_table[ index ]:Stop()
       self.element_state_table[ index ] = SEARCH_None
       return
@@ -388,9 +427,7 @@ function Group:ApplyGroupedFormation( index )
   elseif distance >= self.last_desired_position_table[ self.order_table[ index ] ].max_distance then
     self.element_table[ index ]:GoTo( desired_position, ( distance >= Group.RUN_MAX_DISTANCE_TO_LEADER and MOVE_Run or ( distance >= Group.WALK_DISTANCE_THRESHOLD and MOVE_Walk or MOVE_SlowWalk ) ) )
   else
-    if self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled then
-      self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled = false
-    else
+    if not self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled then
       if self.element_table[ index ].move_type ~= MOVE_Idle then
         self.last_desired_position_table[ self.order_table[ index ] ].must_recal = true
         self.last_desired_position_table[ self.order_table[ index ] ].recal_max_distance = Group.Circle_MAX_DISTANCE
@@ -400,23 +437,45 @@ function Group:ApplyGroupedFormation( index )
   end
 end
 
-function Group:ApplySingleLineFormation( index )
+function Group:ApplySingleLineFormation( index, dt )
+  self:UpdateSingleLineFormation( index, dt )
+  
   if self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled then
     local distance = ( self.element_table[ index ].current_position - self.last_desired_position_table[ self.order_table[ index ] ].last_leader_position ):r()
     if distance <= Group.SINGLE_LINE_MAX_DISTANCE_TO_LEADER then
       self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled = false
+      
+      local found_slot_index = -1
+      for slot_index, slot in ipairs( self.slot_table ) do
+        if slot.element_index == index then
+            found_slot_index = slot_index
+            break
+        end
+      end
+      
+      self.element_relative_position_table[ self.order_table[ index ] ] = self.slot_table[ found_slot_index ].position * Group.CIRCLE_RADIUS
+      
+      local following_index = self.order_table[ index ] + 1
+      
+      if following_index <= #self.line_slot_order_table then
+        self.line_slot_order_table[ following_index ].it_follows = false
+      end
+      
+      self:ResetSearch()
+      self:UpdateSearch()
+      
+      return
     end
   end
-
-  local current_leader = index == 1 and self.leader or self.element_table[ index - 1 ]
-  local desired_position = current_leader.current_position - current_leader:GetMovementDirection() * Group.MIN_DISTANCE_TO_OTHER
+  
+  local desired_position = self.element_relative_position_table[ self.order_table[ index ] ]
 
   local distance = ( self.element_table[ index ].current_position - desired_position ):r()
-  if self.last_desired_position_table[ index ].must_recal then
+  if self.last_desired_position_table[ self.order_table[ index ] ].must_recal then
     self.element_table[ index ]:GoTo( desired_position, MOVE_Recal )
-    self.last_desired_position_table[ index ].must_recal = false
-  elseif distance >= self.last_desired_position_table[ index ].max_distance then
-    self.element_table[ index ]:GoTo( desired_position, distance >= Group.FAST_WALK_DISTANCE_THRESHOLD and MOVE_Walk or MOVE_SlowWalk )
+    self.last_desired_position_table[ self.order_table[ index ] ].must_recal = false
+  elseif distance >= self.last_desired_position_table[ self.order_table[ index ] ].max_distance then
+    self.element_table[ index ]:GoTo( desired_position, distance >= Group.FAST_WALK_DISTANCE_THRESHOLD and MOVE_Walk or MOVE_Walk )
   else
     if not self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled then
       self.element_table[ index ]:StopNow()
@@ -437,63 +496,84 @@ function Group:EnterGroupedFormation()
     while self.slot_table[ slot_index ].element_index ~= -1 do
       slot_index = math.random( 1, #self.slot_table )
     end
-    self.element_relative_position_table[ index ] = self.slot_table[ slot_index ].position * Group.CIRCLE_RADIUS
+    --self.element_relative_position_table[ index ] = self.slot_table[ slot_index ].position * Group.CIRCLE_RADIUS
     self.slot_table[ slot_index ].element_index = index
   end
 end
 
 function Group:EnterSingleLineFormation()
-  local angle_inc = Group.MIN_DISTANCE_TO_OTHER
+  local new_last_leader_position = self.leader.current_position - self.leader:GetMovementDirection() * Group.CHANGE_FORMATION_FROM_GROUPED_MIN_DISTANCE
   for index = 1, #self.element_table do
-    self.element_relative_position_table[ index ] = Vector:new( index * angle_inc, 0.0 )
+    self.element_relative_position_table[ index ] = self.last_desired_position_table[ self.order_table[ index ] ].last_leader_position
+  end
+  
+  self.line_following_trail = {}
+  table.insert( self.line_following_trail, self.leader.current_position )
+  
+  self.line_slot_order_table = {}
+  
+  for i = 1, #self.element_table do
+    self.line_slot_order_table[ i ] = { index = 0, it_follows = ( i ~= 1 ) }
   end
 end
 
 function Group:ExitGroupedFormation()
   local new_last_leader_position = self.leader.current_position - self.leader:GetMovementDirection() * Group.CHANGE_FORMATION_FROM_GROUPED_MIN_DISTANCE
-  for index = 1, #self.element_table do
-    self.last_desired_position_table[ index ] = { it_is_enabled = true, last_leader_position = new_last_leader_position, last_formation_type = self.formation_type, max_distance = Group.SLOW_WALK_DISTANCE_THRESHOLD, must_recal = false, recal_max_distance = Group.Circle_MAX_DISTANCE }
+  
+  for index = 1, #self.slot_table do
+    local element_index = self.slot_table[ index ].element_index
+    if element_index ~= -1 then
+        self.last_desired_position_table[ self.order_table[ element_index ] ] = { it_is_enabled = true, last_leader_position = new_last_leader_position + self.slot_table[ index ].position * Group.CIRCLE_RADIUS, last_formation_type = self.formation_type, max_distance = Group.SLOW_WALK_DISTANCE_THRESHOLD, must_recal = false, recal_max_distance = Group.Circle_MAX_DISTANCE }
+    end
   end
+  
+  self.order_inc = 1
 end
 
 function Group:ExitSingleLineFormation()
-  local new_last_leader_position = self.leader.current_position - self.leader:GetMovementDirection() * Group.CHANGE_FORMATION_FROM_SINGLE_LINE_MIN_DISTANCE
+  local new_last_leader_position = self.line_following_trail[ #self.line_following_trail ]
   for index = 1, #self.element_table do
     self.last_desired_position_table[ index ] = { it_is_enabled = true, last_leader_position = new_last_leader_position, last_formation_type = self.formation_type, max_distance = Group.SINGLE_LINE_MAX_DISTANCE_TO_LEADER, must_recal = false, recal_max_distance = Group.Circle_MAX_DISTANCE }
   end
-end
-
-function Group:OnAddElementToGroupedFormation()
-  local last_index = #self.element_table
-  local closest_distance = -1
-  local closest_index = -1
-  for slot_index, slot in ipairs( self.slot_table ) do
-      local slot_position = self.leader.current_position + slot.position * Group.CIRCLE_RADIUS
-      local current_distance = ( self.element_table[ last_index ].current_position - slot_position ):r()
-      
-      if closest_index == -1 or current_distance < closest_distance then
-          closest_distance = current_distance
-          closest_index = slot_index
-      end
-  end
   
-  --if not self:MoveToSlot( last_index, closest_index, true ) then
-  --    self:MoveToSlot( last_index, closest_index, false )
-  --else
-  --    local current_slot_index = closest_index - 1
-  --    current_slot_index = current_slot_index < 1 and #self.slot_table or current_slot_index
-  --    local slot_to_go = current_slot_index - 1
-  --    slot_to_go = slot_to_go < 1 and #self.slot_table or slot_to_go
-  --    local current_element_index = self.slot_table[ current_slot_index ].element_index
-  --    self.slot_table[ current_slot_index ].element_index = - 1
-  --    self:MoveToSlot( current_element_index, slot_to_go, false )
-  --end
+  self.order_inc = 1
 end
 
-function Group:OnAddElementToSingleLineFormation()
-  local last_index = #self.element_table
-  local angle_inc = Group.MIN_DISTANCE_TO_OTHER
-  for index = 1, #self.element_table do
-    self.element_relative_position_table[ index ] = Vector:new( index * angle_inc, 0.0 )
-  end
+function Group:TryToInsertTrailPosition( new_position )
+    local movement_vector = new_position - self.line_following_trail[ #self.line_following_trail ]
+    if movement_vector:r() > Group.SINGLE_LINE_SAMPLE_DISTANCE then
+        movement_vector = movement_vector:norm()
+        table.insert( self.line_following_trail, self.line_following_trail[ #self.line_following_trail ] + movement_vector * Group.SINGLE_LINE_SAMPLE_DISTANCE )
+    end
+end
+
+function Group:UpdateSingleLineFormation( index, dt )
+    local element = self.element_table[ index ]
+    local current_distance = ( element.current_position - self.element_relative_position_table[ self.order_table[ index ] ] ):r()
+    if current_distance <= Group.LINE_SLOT_MIN_DISTANCE then
+        local new_trail_index = self.line_slot_order_table[ self.order_table[ index ] ].index + 1
+        local max_index
+        if not self.line_slot_order_table[ self.order_table[ index ] ].it_follows then
+            if self.last_desired_position_table[ self.order_table[ index ] ].it_is_enabled then
+                max_index = #self.line_following_trail
+            else
+                max_index = #self.line_following_trail - Group.LINE_SLOT_MIN_INDEX_DISTANCE
+            end
+        else
+            max_index = self.line_slot_order_table[ self.order_table[ index ] - 1 ].index - Group.LINE_SLOT_MIN_INDEX_DISTANCE
+        end
+        
+        if new_trail_index > max_index then
+            new_trail_index = max_index
+        end
+           
+       if new_trail_index > 0 then
+           self.line_slot_order_table[ self.order_table[ index ] ].index = new_trail_index
+           self.element_relative_position_table[ self.order_table[ index ] ] = self.line_following_trail[ new_trail_index ]
+       end
+    end
+end
+
+function Group:UpdateGroupedFormation( index, dt )
+
 end

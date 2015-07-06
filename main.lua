@@ -14,6 +14,7 @@ local coordinator
 local it_can_spawn = true
 
 function love.load()
+  if arg[#arg] == "-debug" then require("mobdebug").start() end
 	math.randomseed( os.time() )
 	love.window.setMode( 1280, 720, { resizable = false, vsync = true } )
 	love.graphics.setBackgroundColor( 100, 100, 100 )
@@ -86,7 +87,7 @@ function love.update( dt )
 		for i, boid in ipairs( boid_list ) do            
 			boid:Update( dt, boid_list )
    
-            print( i .. " " .. ( boid.move_type == MOVE_Idle and "Idle" or boid.move_type == MOVE_FastWalk and "Fast Walk"  or boid.move_type == MOVE_Walk and "Walk" or boid.move_type == MOVE_Run and "Run" or boid.move_type == MOVE_SlowWalk and "Slow Walk" or "Recal" ) )
+            --print( i .. " " .. ( boid.move_type == MOVE_Idle and "Idle" or boid.move_type == MOVE_FastWalk and "Fast Walk"  or boid.move_type == MOVE_Walk and "Walk" or boid.move_type == MOVE_Run and "Run" or boid.move_type == MOVE_SlowWalk and "Slow Walk" or "Recal" ) )
 		end
 	end
 
