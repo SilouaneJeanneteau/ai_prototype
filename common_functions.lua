@@ -5,6 +5,8 @@ SUB_ACTION_None, SUB_ACTION_UTurn, SUB_ACTION_LookFront, SUB_ACTION_LeftTurn, SU
 MOVE_Idle, MOVE_SlowWalk, MOVE_Walk, MOVE_FastWalk, MOVE_Run, MOVE_Recal = 0, 1, 2, 3, 4, 5
 FORMATION_Grouped, FORMATION_SingleLine, FORMATION_Count = 0, 1, 2
 SEARCH_None, SEARCH_First, SEARCH_New = 0, 1, 2
+LOCOMOTION_Position, LOCOMOTION_Trajectory = 0, 1
+TRAJECTORY_Aiming, TRAJECTORY_Navigating = 0, 1
 
 function WrapAngle( angle )
    local result = angle

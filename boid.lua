@@ -24,6 +24,12 @@ Boid.LAST_ANGLE_BOUND = 0.02
 Boid.ANGLE_MAX = 0.6
 Boid.ANGLE_MAX_2 = 2.0
 
+Boid.MIN_DISTANCE_TO_RECAL = 40.0
+Boid.MIN_DISTANCE_TO_IDLE = 5.0
+Boid.MIN_ANGLE_DISTANCE = 5.0
+
+Boid.MAX_ANGLE_CONSIDERED_FLAT = 1
+
 function Boid:new( x, y )
    local instance = {}
    setmetatable(instance, self)
@@ -51,19 +57,29 @@ function Boid:new( x, y )
    instance.action_lock = false
    instance.move_type = MOVE_Idle
    instance.movement_direction = Vector:new( 0, 1 )
-   self.velocity_delta = Vector:new( 0, 0 )
+   instance.locomotion_state = LOCOMOTION_Position
+   instance.velocity_delta = Vector:new( 0, 0 )
+   instance.trajectory = {}
+   instance.trajectory_index = 0
+   instance.trajectory_straight_desired_index = 0
+   instance.trajectory_is_dirty = true
+   instance.start_break_distance = 5.0
 
    return instance
 end
 
 function Boid:Update( dt, other_boids )
-   self:ResolveDecision( dt )
+   if self.locomotion_state == LOCOMOTION_Position then
+       self:ResolveDecision( dt )
 
-   self:ResolveCurrentAction( dt )
+       self:ResolveCurrentAction( dt )
 
-   self:CalculateAvoidanceVelocityVector( other_boids )
+       self:CalculateAvoidanceVelocityVector( other_boids )
 
-   self:ResolvePosition( dt )
+       self:ResolvePosition( dt )
+   elseif self.locomotion_state == LOCOMOTION_Trajectory then
+       self:NavigateTrajectory( dt )
+   end
 end
 
 function Boid:CalculateAvoidanceVelocityVector( boids )
@@ -166,6 +182,11 @@ function Boid:ResolveCurrentAction( dt )
          self.angular_speed_max = 0.5
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.5
+      elseif self.move_type == MOVE_Aim then
+         self.desired_speed = 0.0
+         self.angular_speed_max = 0.07
+         self.angular_acceleration = 0.3
+         self.linear_acceleration = 0.2
       end
 
       self.desired_angle = self.last_input_angle
@@ -219,6 +240,11 @@ function Boid:ResolveCurrentAction( dt )
          self.angular_speed_max = 0.5
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.3
+      elseif self.move_type == MOVE_Aim then
+         self.desired_speed = 0.0
+         self.angular_speed_max = 0.2
+         self.angular_acceleration = 0.1
+         self.angle_blend = 0.2
       end
 
       self.desired_angle = self.last_input_angle
@@ -324,6 +350,22 @@ function Boid:StopSoftly()
     self.current_action = SUB_ACTION_LookFront
 end
 
+function Boid:ChangeLocomotion( locomotion )
+    self.locomotion_state = locomotion
+end
+
+function Boid:AddToTrajectory( point )
+    table.insert( self.trajectory, point )
+    self.trajectory_is_dirty = true
+end
+
+function Boid:ResetTrajectory()
+    self.trajectory = {}
+    self.trajectory_index = 0
+    self.trajectory_straight_desired_index = 0
+    self.trajectory_is_dirty = true
+end
+
 function Boid:draw( i )
    local angle_in_radian = self.sight_angle
    local pawn_size = 25
@@ -357,6 +399,58 @@ function Boid:draw( i )
    love.graphics.print( i, 0, 0, 0, 2, 2 )
 
    love.graphics.origin()
+end
+
+function Boid:NavigateTrajectory( dt )    
+    if self.trajectory_index < #self.trajectory then
+        self.desired_position = self.trajectory[ self.trajectory_index + 1 ]
+        local current_to_target_vector = self.desired_position - self.current_position
+        local speed = current_to_target_vector:r()
+        speed = 200
+        self.current_position = self.current_position + current_to_target_vector:norm() * speed * dt
+        
+        self.current_angle = current_to_target_vector:ang() - 90 * math.pi / 180
+        local angle_sight_speed = WrapAngle( self.current_angle - self.sight_angle ) * self.angle_blend
+        self.sight_angle = WrapAngle( angle_sight_speed + self.sight_angle )
+        
+        if ( self.current_position - self.desired_position ):r() < 5.0 then
+            self.trajectory_index = self.trajectory_index + 1
+        end
+    end
+end
+
+function Boid:UpdateStraightPath( dt )
+    local straight_index_has_changed = false
+    if self.trajectory_straight_desired_index < #self.trajectory and self.trajectory_is_dirty then
+        local first_direction
+        local samed_direction_trajectory_index
+        
+        if self.trajectory_straight_desired_index == 1 then
+            first_direction = ( self.trajectory[ self.trajectory_straight_desired_index ] - self.trajectory[ self.trajectory_straight_desired_index + 1 ] ):norm()
+            samed_direction_trajectory_index = self.trajectory_straight_desired_index + 1
+        else
+            first_direction = ( self.trajectory[ self.trajectory_straight_desired_index - 1 ] - self.trajectory[ self.trajectory_straight_desired_index ] ):norm()
+            samed_direction_trajectory_index = self.trajectory_straight_desired_index
+        end
+        
+        for index = samed_direction_trajectory_index, #self.trajectory - 1 do
+            local current_direction = ( self.trajectory[ index ] - self.trajectory[ index + 1 ] ):norm()
+            local current_angle = math.acos( ( first_direction:dot( current_direction ) ) / ( first_direction:r() * current_direction:r() ) )
+            
+            if current_angle <= ( Boid.MAX_ANGLE_CONSIDERED_FLAT * math.pi / 180 ) then
+                self.trajectory_straight_desired_index = index + 1
+                straight_index_has_changed = true
+            end
+        end
+        
+        self.trajectory_is_dirty = false
+    end
+    
+    return straight_index_has_changed
+end
+
+function Boid:IsInTrajectoryMode()
+  return self.locomotion_state == LOCOMOTION_Trajectory
 end
 
 

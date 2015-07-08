@@ -84,7 +84,7 @@ function love.update( dt )
 	coordinator:UpdateRegion( region_list, dt )
 
 	for _, boid_list in ipairs( boid_list_list ) do
-		for i, boid in ipairs( boid_list ) do            
+		for i, boid in ipairs( boid_list ) do
 			boid:Update( dt, boid_list )
    
             --print( i .. " " .. ( boid.move_type == MOVE_Idle and "Idle" or boid.move_type == MOVE_FastWalk and "Fast Walk"  or boid.move_type == MOVE_Walk and "Walk" or boid.move_type == MOVE_Run and "Run" or boid.move_type == MOVE_SlowWalk and "Slow Walk" or "Recal" ) )
