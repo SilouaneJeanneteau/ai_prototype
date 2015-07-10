@@ -6,19 +6,8 @@ Boid = {
    radius = 30
 }
 
-Boid.MAX_SPEED = 100
-Boid.MIN_SPEED = 80
-Boid.ATTRACTION_RADIUS = Boid.radius * 8
-Boid.ATTRACTION_DAMPER = 10
 Boid.AVOID_RADIUS = Boid.radius
 Boid.AVOID_AMPLIFIER = 2
-Boid.ALIGNMENT_RADIUS = Boid.radius * 3
-Boid.ALIGNMENT_DAMPER = 8
-Boid.HUNTING_RADIUS = Boid.radius * 10
-Boid.HUNTING_DAMPER = 5
-Boid.STAY_VISIBLE_DAMPER = 40
-Boid.FOLLOWING_RADIUS = Boid.radius * 50
-Boid.FOLLOWING_AMPLIFIER = 2
 
 Boid.LAST_ANGLE_BOUND = 0.02
 Boid.ANGLE_MAX = 0.6
@@ -29,6 +18,60 @@ Boid.MIN_DISTANCE_TO_IDLE = 5.0
 Boid.MIN_ANGLE_DISTANCE = 5.0
 
 Boid.MAX_ANGLE_CONSIDERED_FLAT = 1
+
+Boid.MAX_DISTANCE_TO_TRAJECTORY_SLOT = 5.0
+
+-- Capacity parameters
+-- FAST
+Boid.FAST_POSITION_LINEAR_VERY_SLOW_SPEED = 60.0
+Boid.FAST_POSITION_LINEAR_SLOW_SPEED = 180.0
+Boid.FAST_POSITION_LINEAR_NORMAL_SPEED = 300.0
+Boid.FAST_POSITION_LINEAR_FAST_SPEED = 600.0
+Boid.FAST_POSITION_LINEAR_RECAL_SPEED = 60.0
+
+Boid.FAST_MAX_ANGLE_TO_STOP = 40.0
+Boid.FAST_MAX_ANGLE_TO_VERY_SLOW = 30.0
+Boid.FAST_MAX_ANGLE_TO_SLOW = 15.0
+
+Boid.FAST_TRAJECTORY_LINEAR_VERY_SLOW_SPEED = 60.0
+Boid.FAST_TRAJECTORY_LINEAR_SLOW_SPEED = 100.0
+Boid.FAST_TRAJECTORY_LINEAR_NORMAL_SPEED = 180.0
+
+Boid.FAST_TRAJECTORY_ANGULAR_VERY_SLOW_SPEED = 0.1
+Boid.FAST_TRAJECTORY_ANGULAR_SLOW_SPEED = 0.1
+Boid.FAST_TRAJECTORY_ANGULAR_NORMAL_SPEED = 0.2
+
+Boid.FAST_TRAJECTORY_VERY_SLOW_POINT_COUNT = 2
+Boid.FAST_TRAJECTORY_SLOW_POINT_COUNT = 2
+
+Boid.FAST_TRAJECTROY_MINIMUM_SLOT_TO_DETECT_LEADER = 10
+Boid.FAST_TRAJECTROY_JOIN_LEADER_ACCELERATION = 0.05
+
+-- SLOW
+Boid.SLOW_POSITION_LINEAR_VERY_SLOW_SPEED = 20.0
+Boid.SLOW_POSITION_LINEAR_SLOW_SPEED = 80.0
+Boid.SLOW_POSITION_LINEAR_NORMAL_SPEED = 90.0
+Boid.SLOW_POSITION_LINEAR_FAST_SPEED = 100.0
+Boid.SLOW_POSITION_LINEAR_RECAL_SPEED = 20.0
+
+Boid.SLOW_MAX_ANGLE_TO_STOP = 40.0
+Boid.SLOW_MAX_ANGLE_TO_VERY_SLOW = 15.0
+Boid.SLOW_MAX_ANGLE_TO_SLOW = 5.0
+
+Boid.SLOW_TRAJECTORY_LINEAR_VERY_SLOW_SPEED = 20.0
+Boid.SLOW_TRAJECTORY_LINEAR_SLOW_SPEED = 50.0
+Boid.SLOW_TRAJECTORY_LINEAR_NORMAL_SPEED = 80.0
+
+Boid.SLOW_TRAJECTORY_ANGULAR_VERY_SLOW_SPEED = 0.07
+Boid.SLOW_TRAJECTORY_ANGULAR_SLOW_SPEED = 0.08
+Boid.SLOW_TRAJECTORY_ANGULAR_NORMAL_SPEED = 0.2
+
+Boid.SLOW_TRAJECTORY_VERY_SLOW_POINT_COUNT = 2
+Boid.SLOW_TRAJECTORY_SLOW_POINT_COUNT = 3
+
+Boid.SLOW_TRAJECTROY_MINIMUM_SLOT_TO_DETECT_LEADER = 10
+Boid.SLOW_TRAJECTROY_JOIN_LEADER_ACCELERATION = 0.05
+-------
 
 function Boid:new( x, y )
    local instance = {}
@@ -63,27 +106,85 @@ function Boid:new( x, y )
    instance.trajectory_index = 0
    instance.trajectory_straight_desired_index = 0
    instance.trajectory_is_dirty = true
-   instance.start_break_distance = 5.0
+   instance.trajectory_last_index_processed = 0
+   instance.trajectory_last_index = 0
+   instance.trajectory_leader = nil
+   instance.trajectory_follows = true
+   
+   instance:SetCapacityToFast()
 
    return instance
 end
 
+function Boid:SetCapacityToFast()
+   self.POSITION_LINEAR_VERY_SLOW_SPEED = Boid.FAST_POSITION_LINEAR_VERY_SLOW_SPEED
+   self.POSITION_LINEAR_SLOW_SPEED = Boid.FAST_POSITION_LINEAR_SLOW_SPEED
+   self.POSITION_LINEAR_NORMAL_SPEED = Boid.FAST_POSITION_LINEAR_NORMAL_SPEED
+   self.POSITION_LINEAR_FAST_SPEED = Boid.FAST_POSITION_LINEAR_FAST_SPEED
+   self.POSITION_LINEAR_RECAL_SPEED = Boid.FAST_POSITION_LINEAR_RECAL_SPEED
+
+   self.MAX_ANGLE_TO_STOP = Boid.FAST_MAX_ANGLE_TO_STOP
+   self.MAX_ANGLE_TO_VERY_SLOW = Boid.FAST_MAX_ANGLE_TO_VERY_SLOW
+   self.MAX_ANGLE_TO_SLOW = Boid.FAST_MAX_ANGLE_TO_SLOW
+
+   self.TRAJECTORY_LINEAR_VERY_SLOW_SPEED = Boid.FAST_TRAJECTORY_LINEAR_VERY_SLOW_SPEED
+   self.TRAJECTORY_LINEAR_SLOW_SPEED = Boid.FAST_TRAJECTORY_LINEAR_SLOW_SPEED
+   self.TRAJECTORY_LINEAR_NORMAL_SPEED = Boid.FAST_TRAJECTORY_LINEAR_NORMAL_SPEED
+
+   self.TRAJECTORY_ANGULAR_VERY_SLOW_SPEED = Boid.FAST_TRAJECTORY_ANGULAR_VERY_SLOW_SPEED
+   self.TRAJECTORY_ANGULAR_SLOW_SPEED = Boid.FAST_TRAJECTORY_ANGULAR_SLOW_SPEED
+   self.TRAJECTORY_ANGULAR_NORMAL_SPEED = Boid.FAST_TRAJECTORY_ANGULAR_NORMAL_SPEED
+
+   self.TRAJECTORY_VERY_SLOW_POINT_COUNT = Boid.FAST_TRAJECTORY_VERY_SLOW_POINT_COUNT
+   self.TRAJECTORY_SLOW_POINT_COUNT = Boid.FAST_TRAJECTORY_SLOW_POINT_COUNT
+   
+   self.TRAJECTROY_MINIMUM_SLOT_TO_DETECT_LEADER = Boid.FAST_TRAJECTROY_MINIMUM_SLOT_TO_DETECT_LEADER
+   self.TRAJECTROY_JOIN_LEADER_ACCELERATION = Boid.FAST_TRAJECTROY_JOIN_LEADER_ACCELERATION
+end
+
+function Boid:SetCapacityToSlow()
+   self.POSITION_LINEAR_VERY_SLOW_SPEED = Boid.SLOW_POSITION_LINEAR_VERY_SLOW_SPEED
+   self.POSITION_LINEAR_SLOW_SPEED = Boid.SLOW_POSITION_LINEAR_SLOW_SPEED
+   self.POSITION_LINEAR_NORMAL_SPEED = Boid.SLOW_POSITION_LINEAR_NORMAL_SPEED
+   self.POSITION_LINEAR_FAST_SPEED = Boid.SLOW_POSITION_LINEAR_FAST_SPEED
+   self.POSITION_LINEAR_RECAL_SPEED = Boid.SLOW_POSITION_LINEAR_RECAL_SPEED
+
+   self.MAX_ANGLE_TO_STOP = Boid.SLOW_MAX_ANGLE_TO_STOP
+   self.MAX_ANGLE_TO_VERY_SLOW = Boid.SLOW_MAX_ANGLE_TO_VERY_SLOW
+   self.MAX_ANGLE_TO_SLOW = Boid.SLOW_MAX_ANGLE_TO_SLOW
+
+   self.TRAJECTORY_LINEAR_VERY_SLOW_SPEED = Boid.SLOW_TRAJECTORY_LINEAR_VERY_SLOW_SPEED
+   self.TRAJECTORY_LINEAR_SLOW_SPEED = Boid.SLOW_TRAJECTORY_LINEAR_SLOW_SPEED
+   self.TRAJECTORY_LINEAR_NORMAL_SPEED = Boid.SLOW_TRAJECTORY_LINEAR_NORMAL_SPEED
+
+   self.TRAJECTORY_ANGULAR_VERY_SLOW_SPEED = Boid.SLOW_TRAJECTORY_ANGULAR_VERY_SLOW_SPEED
+   self.TRAJECTORY_ANGULAR_SLOW_SPEED = Boid.SLOW_TRAJECTORY_ANGULAR_SLOW_SPEED
+   self.TRAJECTORY_ANGULAR_NORMAL_SPEED = Boid.SLOW_TRAJECTORY_ANGULAR_NORMAL_SPEED
+
+   self.TRAJECTORY_VERY_SLOW_POINT_COUNT = Boid.SLOW_TRAJECTORY_VERY_SLOW_POINT_COUNT
+   self.TRAJECTORY_SLOW_POINT_COUNT = Boid.SLOW_TRAJECTORY_SLOW_POINT_COUNT
+   
+   self.TRAJECTROY_MINIMUM_SLOT_TO_DETECT_LEADER = Boid.SLOW_TRAJECTROY_MINIMUM_SLOT_TO_DETECT_LEADER
+   self.TRAJECTROY_JOIN_LEADER_ACCELERATION = Boid.SLOW_TRAJECTROY_JOIN_LEADER_ACCELERATION
+end
+
 function Boid:Update( dt, other_boids )
-   if self.locomotion_state == LOCOMOTION_Position then
-       self:ResolveDecision( dt )
+    if self.locomotion_state == LOCOMOTION_Position then
+        self:ResolveDecision( dt )
 
-       self:ResolveCurrentAction( dt )
+        self:ResolveCurrentAction( dt )
 
-       self:CalculateAvoidanceVelocityVector( other_boids )
+        self:CalculateAvoidanceVelocityVector( other_boids )
 
-       self:ResolvePosition( dt )
-   elseif self.locomotion_state == LOCOMOTION_Trajectory then
-       self:NavigateTrajectory( dt )
-   end
+        self:ResolvePosition( dt )
+    elseif self.locomotion_state == LOCOMOTION_Trajectory then
+        self:UpdateTrajectoryProcessing( dt )
+        self:NavigateTrajectory( dt )
+    end
 end
 
 function Boid:CalculateAvoidanceVelocityVector( boids )
-  local new_avoidance_vector = Vector:new( 0, 0 ) 
+  local new_avoidance_vector = Vector:new( 0, 0 )
    for _, other in ipairs( boids ) do
       if self.current_position:isNearby(Boid.AVOID_RADIUS, other.current_position) then
          local avoid_vector = (self.current_position - other.current_position)
@@ -133,12 +234,12 @@ function Boid:ResolveDecision( dt )
       elseif self.desired_action == ACTION_LookFront then
          self.current_action = SUB_ACTION_LookFront
       elseif self.desired_action == ACTION_GoBack then
-         if self.current_speed < 1.0 then
+         if self.current_speed < 60.0 then
             self.current_action = SUB_ACTION_UTurn
          else
             self.drift_angle = self.current_angle
 
-            if self.current_speed > -1.0 and self.current_speed < 6.0 then
+            if self.current_speed > -60.0 and self.current_speed < 360.0 then
                self.current_action = SUB_ACTION_DriftUTurn
             else
                self.current_action = SUB_ACTION_BigDriftUTurn
@@ -158,27 +259,27 @@ function Boid:ResolveCurrentAction( dt )
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.2 --0.6
       elseif self.move_type == MOVE_SlowWalk then
-         self.desired_speed = 1.0
+         self.desired_speed = self.POSITION_LINEAR_VERY_SLOW_SPEED
          self.angular_speed_max = 0.1
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.08
       elseif self.move_type == MOVE_Walk then
-         self.desired_speed = 3.0
+         self.desired_speed = self.POSITION_LINEAR_SLOW_SPEED
          self.angular_speed_max = 0.1
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.05
       elseif self.move_type == MOVE_FastWalk then
-         self.desired_speed = 5.0
+         self.desired_speed = self.POSITION_LINEAR_NORMAL_SPEED
          self.angular_speed_max = 0.1
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.02
       elseif self.move_type == MOVE_Run then
-         self.desired_speed = 10.0
+         self.desired_speed = self.POSITION_LINEAR_FAST_SPEED
          self.angular_speed_max = 0.2
          self.angular_acceleration = 0.15
          self.linear_acceleration = 0.01
       elseif self.move_type == MOVE_Recal then
-         self.desired_speed = 1.0
+         self.desired_speed = self.POSITION_LINEAR_RECAL_SPEED
          self.angular_speed_max = 0.5
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.5
@@ -191,7 +292,7 @@ function Boid:ResolveCurrentAction( dt )
 
       self.desired_angle = self.last_input_angle
    elseif self.current_action == SUB_ACTION_DriftUTurn then
-      self.desired_speed = -1.0
+      self.desired_speed = -self.POSITION_LINEAR_VERY_SLOW_SPEED
       self.angular_speed_max = 0.01
       self.angle_blend = 0.1
       self.angular_acceleration = 0.2
@@ -203,7 +304,7 @@ function Boid:ResolveCurrentAction( dt )
          self.current_action = SUB_ACTION_UTurn
       end
    elseif self.current_action == SUB_ACTION_BigDriftUTurn then
-      self.desired_speed = -3.0
+      self.desired_speed = -self.POSITION_LINEAR_SLOW_SPEED
       self.angular_speed_max = 0.01
       self.angle_blend = 0.1
       self.angular_acceleration = 0.2
@@ -236,7 +337,7 @@ function Boid:ResolveCurrentAction( dt )
          self.angular_acceleration = 0.1
          self.angle_blend = 0.2
       elseif self.move_type == MOVE_Recal then
-         self.desired_speed = 1.0
+         self.desired_speed = self.POSITION_LINEAR_RECAL_SPEED
          self.angular_speed_max = 0.5
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.3
@@ -292,14 +393,14 @@ function Boid:ResolvePosition( dt )
    if self.move_type == MOVE_Recal then
        movement_direction = ( self.desired_position - self.current_position ):norm()
    else
-       movement_direction = Vector:new( math.cos( self.current_angle ), math.sin( self.current_angle ) ) + self.velocity_delta
+       movement_direction = ( Vector:new( math.cos( self.current_angle ), math.sin( self.current_angle ) ) + self.velocity_delta ):norm()
    end
 
-   self.current_position = self.current_position + movement_direction * self.current_speed
+   self.current_position = self.current_position + movement_direction * self.current_speed * dt
 
    self.velocity_delta = Vector:new( 0, 0 )
 
-   if math.abs( self.current_speed ) > 0.5 then
+   if math.abs( self.current_speed ) > 30.0 then
       self.movement_direction = ( self.current_position - old_position ):norm()
    end
 end
@@ -355,7 +456,7 @@ function Boid:ChangeLocomotion( locomotion )
 end
 
 function Boid:AddToTrajectory( point )
-    table.insert( self.trajectory, point )
+    table.insert( self.trajectory, { position = point, flag = TRAJECTORY_POINT_Normal } )
     self.trajectory_is_dirty = true
 end
 
@@ -363,6 +464,8 @@ function Boid:ResetTrajectory()
     self.trajectory = {}
     self.trajectory_index = 0
     self.trajectory_straight_desired_index = 0
+    self.trajectory_last_index_processed = 0
+    self.trajectory_last_index = 0
     self.trajectory_is_dirty = true
 end
 
@@ -401,56 +504,190 @@ function Boid:draw( i )
    love.graphics.origin()
 end
 
-function Boid:NavigateTrajectory( dt )    
-    if self.trajectory_index < #self.trajectory then
-        self.desired_position = self.trajectory[ self.trajectory_index + 1 ]
+function Boid:StartTrajectoryMode( leader )
+    self:ChangeLocomotion( LOCOMOTION_Trajectory )
+    self.linear_acceleration = 0.4
+    self.trajectory_leader = leader
+end
+
+function Boid:StartPositionMode()
+    self:ChangeLocomotion( LOCOMOTION_Position )
+    self.move_type = MOVE_Walk
+    self.current_speed = 0.0
+end
+
+function Boid:NavigateTrajectory( dt )
+    if self.trajectory_index < self.trajectory_last_index then
+        self.desired_position = self.trajectory[ self.trajectory_index + 1 ].position
         local current_to_target_vector = self.desired_position - self.current_position
-        local speed = current_to_target_vector:r()
-        speed = 200
-        self.current_position = self.current_position + current_to_target_vector:norm() * speed * dt
+        local linear_speed = self.TRAJECTORY_LINEAR_NORMAL_SPEED
+        local angle_speed = self.angle_blend
+        local linear_acceleration = self.linear_acceleration
+        
+        if self.trajectory_index > 0 then
+            if self.trajectory[ self.trajectory_index ].flag == TRAJECTORY_POINT_VerySlow then
+                linear_speed = self.TRAJECTORY_LINEAR_VERY_SLOW_SPEED
+                angle_speed = self.TRAJECTORY_ANGULAR_SLOW_SPEED
+            elseif self.trajectory[ self.trajectory_index ].flag == TRAJECTORY_POINT_Slow then
+                linear_speed = self.TRAJECTORY_LINEAR_SLOW_SPEED
+                angle_speed = self.TRAJECTORY_ANGULAR_SLOW_SPEED
+            elseif self.trajectory[ self.trajectory_index ].flag == TRAJECTORY_POINT_Normal then
+                linear_speed = self.TRAJECTORY_LINEAR_NORMAL_SPEED
+                angle_speed = self.TRAJECTORY_ANGULAR_SLOW_SPEED
+            elseif self.trajectory[ self.trajectory_index ].flag == TRAJECTORY_POINT_Stop then
+                linear_speed = IsAlmostEqual( WrapAngle( self.current_angle ), WrapAngle( self.sight_angle ), 0.01 ) and self.TRAJECTORY_LINEAR_VERY_SLOW_SPEED or 0
+                angle_speed = self.TRAJECTORY_ANGULAR_VERY_SLOW_SPEED
+            end
+        end
+        
+        if self.trajectory_follows then
+            local leader_position_index = self.trajectory_leader:GetLastTrajectoryIndex()
+            leader_position_index = leader_position_index == -1 and #self.trajectory or leader_position_index
+            local leader_to_boid_index_difference = leader_position_index - self.trajectory_index
+            
+            if leader_to_boid_index_difference < self.TRAJECTROY_MINIMUM_SLOT_TO_DETECT_LEADER then
+                if self.trajectory_leader.current_speed < linear_speed then
+                    linear_speed = self.trajectory_leader.current_speed
+                    linear_acceleration = self.TRAJECTROY_JOIN_LEADER_ACCELERATION
+                end
+            end
+        end
+        
+        self.desired_speed = linear_speed
+        self.current_speed = self.current_speed + ( self.desired_speed - self.current_speed ) * linear_acceleration
+        self.current_position = self.current_position + current_to_target_vector:norm() * self.current_speed * dt
         
         self.current_angle = current_to_target_vector:ang() - 90 * math.pi / 180
-        local angle_sight_speed = WrapAngle( self.current_angle - self.sight_angle ) * self.angle_blend
+        local angle_sight_speed = WrapAngle( self.current_angle - self.sight_angle ) * angle_speed
         self.sight_angle = WrapAngle( angle_sight_speed + self.sight_angle )
         
-        if ( self.current_position - self.desired_position ):r() < 5.0 then
+        if ( self.current_position - self.desired_position ):r() < Boid.MAX_DISTANCE_TO_TRAJECTORY_SLOT then
             self.trajectory_index = self.trajectory_index + 1
         end
     end
 end
 
-function Boid:UpdateStraightPath( dt )
-    local straight_index_has_changed = false
-    if self.trajectory_straight_desired_index < #self.trajectory and self.trajectory_is_dirty then
-        local first_direction
-        local samed_direction_trajectory_index
-        
-        if self.trajectory_straight_desired_index == 1 then
-            first_direction = ( self.trajectory[ self.trajectory_straight_desired_index ] - self.trajectory[ self.trajectory_straight_desired_index + 1 ] ):norm()
-            samed_direction_trajectory_index = self.trajectory_straight_desired_index + 1
+function Boid:UpdateTrajectoryProcessing( dt )    
+    if self.trajectory_last_index_processed < #self.trajectory and self.trajectory_is_dirty then
+        if self.trajectory_last_index_processed == 0 then
+            self.trajectory_last_index_processed = self.trajectory_last_index_processed + 1
+            self.trajectory[ self.trajectory_last_index_processed ].flag = TRAJECTORY_POINT_Normal
         else
-            first_direction = ( self.trajectory[ self.trajectory_straight_desired_index - 1 ] - self.trajectory[ self.trajectory_straight_desired_index ] ):norm()
-            samed_direction_trajectory_index = self.trajectory_straight_desired_index
-        end
-        
-        for index = samed_direction_trajectory_index, #self.trajectory - 1 do
-            local current_direction = ( self.trajectory[ index ] - self.trajectory[ index + 1 ] ):norm()
-            local current_angle = math.acos( ( first_direction:dot( current_direction ) ) / ( first_direction:r() * current_direction:r() ) )
+            local last_direction
             
-            if current_angle <= ( Boid.MAX_ANGLE_CONSIDERED_FLAT * math.pi / 180 ) then
-                self.trajectory_straight_desired_index = index + 1
-                straight_index_has_changed = true
+            for index = self.trajectory_last_index_processed + 1, #self.trajectory do
+                if self.trajectory_last_index_processed > 1 then
+                    last_direction = ( self.trajectory[ self.trajectory_last_index_processed ].position - self.trajectory[ self.trajectory_last_index_processed - 1 ].position ):norm()
+                else
+                    last_direction = ( self.trajectory[ self.trajectory_last_index_processed + 1 ].position - self.trajectory[ self.trajectory_last_index_processed ].position ):norm()
+                end
+                local current_direction = ( self.trajectory[ index ].position - self.trajectory[ index - 1 ].position ):norm()
+                local current_angle = math.acos( last_direction:dot( current_direction ) / ( last_direction:r() * current_direction:r() ) )
+                
+                if current_angle >= ( self.MAX_ANGLE_TO_STOP * math.pi / 180 ) then
+                    self:ProcessStop( index )
+                elseif current_angle >= ( self.MAX_ANGLE_TO_VERY_SLOW * math.pi / 180 ) then
+                    self:ProcessVerySlow( index )
+                elseif current_angle >= ( self.MAX_ANGLE_TO_SLOW * math.pi / 180 ) then
+                    self:ProcessSlow( index )
+                else
+                    self:ProcessNormal( index )
+                end
+                
+                self.trajectory_last_index_processed = self.trajectory_last_index_processed + 1
             end
-        end
         
-        self.trajectory_is_dirty = false
+            self.trajectory_is_dirty = false
+        end
     end
-    
-    return straight_index_has_changed
+end
+
+function Boid:ProcessStop( index )
+  local first_index
+  local last_index
+  local start_index
+  
+  first_index = index - self.TRAJECTORY_VERY_SLOW_POINT_COUNT
+  last_index = index - 1
+  first_index = first_index > 0 and first_index or 1
+  last_index = last_index > 0 and last_index or 1
+  start_index = first_index
+  
+  for current_index = first_index, last_index do
+    self.trajectory[ current_index ].flag = TRAJECTORY_POINT_VerySlow
+  end
+  
+  first_index = start_index - self.TRAJECTORY_SLOW_POINT_COUNT
+  last_index = start_index - 1
+  first_index = first_index > 0 and first_index or 1
+  last_index = last_index > 0 and last_index or 1
+  
+  for current_index = first_index, last_index do
+    self.trajectory[ current_index ].flag = TRAJECTORY_POINT_Slow
+  end
+  
+  self.trajectory[ index ].flag = TRAJECTORY_POINT_Stop
+end
+
+function Boid:ProcessVerySlow( index )
+  local first_index
+  local last_index
+  
+  first_index = index - self.TRAJECTORY_SLOW_POINT_COUNT
+  first_index = first_index > 0 and first_index or 1
+  last_index = index - 1
+  last_index = last_index > 0 and last_index or 1
+  
+  for current_index = first_index, last_index do
+    self.trajectory[ current_index ].flag = TRAJECTORY_POINT_Slow
+  end
+  
+  self.trajectory[ index ].flag = TRAJECTORY_POINT_VerySlow
+end
+
+function Boid:ProcessSlow( index )
+  self.trajectory[ index ].flag = TRAJECTORY_POINT_Slow
+end
+
+function Boid:ProcessNormal( index )
+  local previous_index = index - 1
+  if previous_index > 0 then
+      if self.trajectory[ previous_index ].flag == TRAJECTORY_POINT_Stop then
+          self.trajectory[ index ].flag = TRAJECTORY_POINT_VerySlow
+      elseif self.trajectory[ previous_index ].flag == TRAJECTORY_POINT_VerySlow then
+          for current_index = index - self.TRAJECTORY_VERY_SLOW_POINT_COUNT, index - 2 do
+            if current_index > 0 then
+              if self.trajectory[ current_index ].flag ~= TRAJECTORY_POINT_VerySlow then
+                self.trajectory[ index ].flag = TRAJECTORY_POINT_VerySlow
+                return
+              end
+            end
+          end
+          
+          self.trajectory[ index ].flag = TRAJECTORY_POINT_Slow
+      elseif self.trajectory[ previous_index ].flag == TRAJECTORY_POINT_Slow then
+          for current_index = index - self.TRAJECTORY_SLOW_POINT_COUNT, index - 2 do
+            if current_index > 0 then
+              if self.trajectory[ current_index ].flag ~= TRAJECTORY_POINT_Slow then
+                self.trajectory[ index ].flag = TRAJECTORY_POINT_Slow
+                return
+              end
+            end
+          end
+          
+          self.trajectory[ index ].flag = TRAJECTORY_POINT_Normal
+      else
+          self.trajectory[ index ].flag = TRAJECTORY_POINT_Normal
+      end
+  else
+      self.trajectory[ index ].flag = TRAJECTORY_POINT_Normal
+  end
 end
 
 function Boid:IsInTrajectoryMode()
   return self.locomotion_state == LOCOMOTION_Trajectory
 end
 
-
+function Boid:GetLastTrajectoryIndex()
+    return self.trajectory_index
+end

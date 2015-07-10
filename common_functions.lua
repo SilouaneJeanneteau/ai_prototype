@@ -7,6 +7,7 @@ FORMATION_Grouped, FORMATION_SingleLine, FORMATION_Count = 0, 1, 2
 SEARCH_None, SEARCH_First, SEARCH_New = 0, 1, 2
 LOCOMOTION_Position, LOCOMOTION_Trajectory = 0, 1
 TRAJECTORY_Aiming, TRAJECTORY_Navigating = 0, 1
+TRAJECTORY_POINT_VerySlow, TRAJECTORY_POINT_Slow, TRAJECTORY_POINT_Normal, TRAJECTORY_POINT_Stop = 0, 1, 2, 3
 
 function WrapAngle( angle )
    local result = angle
@@ -40,4 +41,25 @@ function ShallowCopy( orig )
         copy = orig
     end
     return copy
+end
+
+function IsAlmostEqual( number1, number2, epsilon )
+    local difference
+
+    difference = number1 - number2
+
+    return ( ( difference * difference ) <= ( epsilon * epsilon ) )
+end
+
+function ProjectPointOntoLine( line1, line2, point )
+    local m = ( line2.x - line1.x ) == 0 and 0 or ( line2.y - line1.y ) / ( line2.x - line1.x )
+    local b = line1.y - ( m * line1.x )
+    local x = ( m * point.y + point.x - m * b ) / ( m * m + 1 )
+    local y = ( m * m * point.y + m * point.x + b ) / ( m * m + 1 )
+    
+    return Vector:new( x, y )
+end
+
+function AngleBetweenVectors( vector1, vector2 )
+    return math.acos( vector2:dot( vector1 ) / ( vector2:r() * vector1:r() ) )
 end

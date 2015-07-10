@@ -301,3 +301,7 @@ end
 function Player:GetMovementDirection()
    return self.movement_direction
 end
+
+function Player:GetLastTrajectoryIndex()
+    return -1
+end

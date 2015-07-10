@@ -41,6 +41,10 @@ function Vector:__mul(num)
    return Vector:new(self.x * num, self.y * num)
 end
 
+function Vector:Mul(a)
+   return Vector:new(self.x * a.x, self.y * a.y)
+end
+
 function Vector:__div(num)
    if (num ~= 0) then
       return Vector:new(self.x / num, self.y / num)

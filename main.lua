@@ -103,6 +103,11 @@ function love.update( dt )
 				math.random( 30 ) - 15
 				)
 			)
+			
+			local boid_count = #boid_list_list[ group_index ]
+			if ( boid_count % 2 ) == 0 then
+			    boid_list_list[ group_index ][ boid_count ]:SetCapacityToSlow()
+			end
 
 			coordinator:OnAddToGroup( group_index )
 
