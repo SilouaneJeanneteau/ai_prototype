@@ -93,7 +93,9 @@ function love.update( dt )
 
 	player:Update( dt )
 
-	if love.mouse.isDown( "l" ) then
+    local left_mouse_click = love.mouse.isDown( "l" )
+    local right_mouse_click = love.mouse.isDown( "r" )
+	if left_mouse_click or right_mouse_click then
 	    local group_index = 1
 		if it_can_spawn and 1 + #boid_list_list[ group_index ] <= Group.MAX_SLOT_PER_CIRCLE then
 			table.insert( boid_list_list[ group_index ], Boid:new(
@@ -105,7 +107,7 @@ function love.update( dt )
 			)
 			
 			local boid_count = #boid_list_list[ group_index ]
-			if ( boid_count % 2 ) == 0 then
+			if right_mouse_click then
 			    boid_list_list[ group_index ][ boid_count ]:SetCapacityToSlow()
 			end
 
