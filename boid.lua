@@ -28,6 +28,7 @@ Boid.FAST_POSITION_LINEAR_SLOW_SPEED = 180.0
 Boid.FAST_POSITION_LINEAR_NORMAL_SPEED = 300.0
 Boid.FAST_POSITION_LINEAR_FAST_SPEED = 600.0
 Boid.FAST_POSITION_LINEAR_RECAL_SPEED = 60.0
+Boid.FAST_POSITION_LINEAR_FAST_RECAL_SPEED = 120.0
 
 Boid.FAST_MAX_ANGLE_TO_STOP = 40.0
 Boid.FAST_MAX_ANGLE_TO_VERY_SLOW = 30.0
@@ -53,6 +54,7 @@ Boid.SLOW_POSITION_LINEAR_SLOW_SPEED = 80.0
 Boid.SLOW_POSITION_LINEAR_NORMAL_SPEED = 90.0
 Boid.SLOW_POSITION_LINEAR_FAST_SPEED = 100.0
 Boid.SLOW_POSITION_LINEAR_RECAL_SPEED = 20.0
+Boid.SLOW_POSITION_LINEAR_FAST_RECAL_SPEED = 60.0
 
 Boid.SLOW_MAX_ANGLE_TO_STOP = 40.0
 Boid.SLOW_MAX_ANGLE_TO_VERY_SLOW = 15.0
@@ -122,6 +124,7 @@ function Boid:SetCapacityToFast()
    self.POSITION_LINEAR_NORMAL_SPEED = Boid.FAST_POSITION_LINEAR_NORMAL_SPEED
    self.POSITION_LINEAR_FAST_SPEED = Boid.FAST_POSITION_LINEAR_FAST_SPEED
    self.POSITION_LINEAR_RECAL_SPEED = Boid.FAST_POSITION_LINEAR_RECAL_SPEED
+   self.POSITION_LINEAR_FAST_RECAL_SPEED = Boid.FAST_POSITION_LINEAR_FAST_RECAL_SPEED
 
    self.MAX_ANGLE_TO_STOP = Boid.FAST_MAX_ANGLE_TO_STOP
    self.MAX_ANGLE_TO_VERY_SLOW = Boid.FAST_MAX_ANGLE_TO_VERY_SLOW
@@ -148,6 +151,7 @@ function Boid:SetCapacityToSlow()
    self.POSITION_LINEAR_NORMAL_SPEED = Boid.SLOW_POSITION_LINEAR_NORMAL_SPEED
    self.POSITION_LINEAR_FAST_SPEED = Boid.SLOW_POSITION_LINEAR_FAST_SPEED
    self.POSITION_LINEAR_RECAL_SPEED = Boid.SLOW_POSITION_LINEAR_RECAL_SPEED
+   self.POSITION_LINEAR_FAST_RECAL_SPEED = Boid.SLOW_POSITION_LINEAR_FAST_RECAL_SPEED
 
    self.MAX_ANGLE_TO_STOP = Boid.SLOW_MAX_ANGLE_TO_STOP
    self.MAX_ANGLE_TO_VERY_SLOW = Boid.SLOW_MAX_ANGLE_TO_VERY_SLOW
@@ -257,7 +261,7 @@ function Boid:ResolveCurrentAction( dt )
          self.desired_speed = 0.0
          self.angular_speed_max = 0.07
          self.angular_acceleration = 0.3
-         self.linear_acceleration = 0.2 --0.6
+         self.linear_acceleration = 0.3 --0.6
       elseif self.move_type == MOVE_SlowWalk then
          self.desired_speed = self.POSITION_LINEAR_VERY_SLOW_SPEED
          self.angular_speed_max = 0.1
@@ -280,6 +284,11 @@ function Boid:ResolveCurrentAction( dt )
          self.linear_acceleration = 0.01
       elseif self.move_type == MOVE_Recal then
          self.desired_speed = self.POSITION_LINEAR_RECAL_SPEED
+         self.angular_speed_max = 0.5
+         self.angular_acceleration = 0.3
+         self.linear_acceleration = 0.5
+      elseif self.move_type == MOVE_FastRecal then
+         self.desired_speed = self.POSITION_LINEAR_FAST_RECAL_SPEED
          self.angular_speed_max = 0.5
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.5
@@ -341,6 +350,11 @@ function Boid:ResolveCurrentAction( dt )
          self.angular_speed_max = 0.5
          self.angular_acceleration = 0.3
          self.linear_acceleration = 0.3
+      elseif self.move_type == MOVE_FastRecal then
+         self.desired_speed = self.POSITION_LINEAR_FAST_RECAL_SPEED
+         self.angular_speed_max = 0.5
+         self.angular_acceleration = 0.3
+         self.linear_acceleration = 0.3
       elseif self.move_type == MOVE_Aim then
          self.desired_speed = 0.0
          self.angular_speed_max = 0.2
@@ -390,7 +404,7 @@ function Boid:ResolvePosition( dt )
    local old_position = self.current_position
    local movement_direction
    
-   if self.move_type == MOVE_Recal then
+   if self.move_type == MOVE_Recal or self.move_type == MOVE_FastRecal then
        movement_direction = ( self.desired_position - self.current_position ):norm()
    else
        movement_direction = ( Vector:new( math.cos( self.current_angle ), math.sin( self.current_angle ) ) + self.velocity_delta ):norm()

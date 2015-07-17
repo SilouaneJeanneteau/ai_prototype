@@ -4,14 +4,17 @@ require 'bait'
 require 'player'
 require 'region'
 require 'coordinator'
+require 'dummy'
 
-local boid_count = 1
+local attack_boid_count = 8
+local defense_boid_count = 3
 local boid_list_list = { {} }
 local bait_list = {}
 local region_list = {}
 local player
 local coordinator
 local it_can_spawn = true
+local dummy = nil
 
 function love.load()
   if arg[#arg] == "-debug" then require("mobdebug").start() end
@@ -27,19 +30,22 @@ function InitSimulation()
 	region_list = {}
 
 	player = Player:new(
-		0.5 * love.graphics.getWidth(),
-		0.5 * love.graphics.getHeight()
+		230,
+		50
 		)
+	
+	dummy = Dummy:new( 900.0, 400.0 )
 
-	CreateRandomBoid( 1, boid_count )
+	CreateRandomBoid( 1, attack_boid_count )
+	CreateBoidInsideArea( 2, defense_boid_count, { center = player.current_position, extent = Vector:new( 100.0, 100.0 ) } )
 
-	--CreateRandomBoid( 2, boid_count )
+	coordinator = Coordinator:new( region_list )
+	coordinator:Register( boid_list_list[ 1 ], dummy )
+	coordinator:Register( boid_list_list[ 2 ], player )
+	coordinator.group_list[ 1 ]:StartAttackMode( coordinator.group_list[ 2 ].element_table, coordinator.group_list[ 2 ].leader )
+	coordinator.group_list[ 2 ]:ChangeFormationRadius( 30 )
 
-	coordinator = Coordinator:new()
-	coordinator:Register( boid_list_list[ 1 ], player )
-	--coordinator:Register( boid_list_list[ 2 ], boid_list_list[ 1 ][ 1 ] )
-
-	CreateRegion( -300, 0, 800, { r = 10, g = 205, b = 25, a = 255 } )
+	CreateRegion( -100, -100, 300, { r = 10, g = 205, b = 25, a = 255 } )
 end
 
 function love.draw()
@@ -58,16 +64,22 @@ function love.draw()
 			boid:draw( i )
 		end
 	end
+	
+    dummy:draw()
 
-   player:draw()
+    player:draw()
 end
 
 function CreateRandomBoid( index, count )
-	boid_list_list[ index ] = {}
+	CreateBoidInsideArea( index, count, { center = Vector:new( love.graphics.getWidth() * 0.5, love.graphics.getHeight() * 0.5 ), extent = Vector:new( love.graphics.getWidth() * 0.5, love.graphics.getHeight() * 0.5 ) } )
+end
+
+function CreateBoidInsideArea( index, count, area )
+    boid_list_list[ index ] = {}
 	for i = 1, count do
 		table.insert( boid_list_list[ index ], Boid:new(
-			math.random() * love.graphics.getWidth(),
-			math.random() * love.graphics.getHeight(),
+			math.random( area.center.x - area.extent.x, area.center.x + area.extent.x ),
+			math.random( area.center.y - area.extent.y, area.center.y + area.extent.y ),
 			math.random( 30 ) - 15,
 			math.random( 30 ) - 15
 			)
@@ -76,19 +88,17 @@ function CreateRandomBoid( index, count )
 end
 
 function CreateRegion( x, y, size, color )
-	table.insert( region_list, Region:new( x, y, size, color ) )
+	table.insert( region_list, Region:new( x, y, size, color, REGION_TYPE_Forest ) )
 end
 
 function love.update( dt )
 	coordinator:Update( dt )
-	coordinator:UpdateRegion( region_list, dt )
+	coordinator:UpdateRegion( dt )
 
 	for _, boid_list in ipairs( boid_list_list ) do
 		for i, boid in ipairs( boid_list ) do
 			boid:Update( dt, boid_list )
-   
-            --print( i .. " " .. ( boid.move_type == MOVE_Idle and "Idle" or boid.move_type == MOVE_FastWalk and "Fast Walk"  or boid.move_type == MOVE_Walk and "Walk" or boid.move_type == MOVE_Run and "Run" or boid.move_type == MOVE_SlowWalk and "Slow Walk" or "Recal" ) )
-		end
+        end
 	end
 
 	player:Update( dt )
@@ -96,7 +106,7 @@ function love.update( dt )
     local left_mouse_click = love.mouse.isDown( "l" )
     local right_mouse_click = love.mouse.isDown( "r" )
 	if left_mouse_click or right_mouse_click then
-	    local group_index = 1
+	    local group_index = 2
 		if it_can_spawn and 1 + #boid_list_list[ group_index ] <= Group.MAX_SLOT_PER_CIRCLE then
 			table.insert( boid_list_list[ group_index ], Boid:new(
 				love.mouse.getX(),
@@ -112,6 +122,8 @@ function love.update( dt )
 			end
 
 			coordinator:OnAddToGroup( group_index )
+			
+			coordinator.group_list[ 1 ]:AddEnemy( boid_list_list[ group_index ][ boid_count ] )
 
 			it_can_spawn = false
 		end
