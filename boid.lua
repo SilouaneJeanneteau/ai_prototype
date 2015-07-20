@@ -6,6 +6,8 @@ Boid = {
    radius = 30
 }
 
+Boid.ItRendersNumbers = false
+
 Boid.AVOID_RADIUS = Boid.radius
 Boid.AVOID_AMPLIFIER = 2
 
@@ -113,6 +115,8 @@ function Boid:new( x, y )
    instance.trajectory_leader = nil
    instance.trajectory_follows = true
    
+   instance.forced_look_at_position = nil
+   
    instance:SetCapacityToFast()
 
    return instance
@@ -200,6 +204,19 @@ function Boid:CalculateAvoidanceVelocityVector( boids )
    end
 
    self.velocity_delta = self.velocity_delta + ( new_avoidance_vector - self.velocity_delta ) * 0.2
+end
+
+function Boid:AngleToForcedLookAtPosition()
+    if self.forced_look_at_position ~= nil then
+        local delta_x = ( self.forced_look_at_position.x - self.current_position.x )
+        local delta_y = ( self.forced_look_at_position.y - self.current_position.y )
+        
+        if math.abs( delta_x ) > 0.001 or math.abs( delta_y ) > 0.001 then
+            return math.atan2( delta_y, delta_x )
+        end
+    end
+    
+    return nil
 end
 
 function Boid:ResolveDecision( dt )
@@ -395,7 +412,15 @@ function Boid:ResolvePosition( dt )
        end
 
        self.current_angle = WrapAngle( self.current_angle + self.last_angular_speed )
-       local angle_sight_speed = WrapAngle( self.current_angle - self.sight_angle ) * self.angle_blend
+
+       local forced_look_at_angle = self:AngleToForcedLookAtPosition()
+       local angle_sight_speed
+       if forced_look_at_angle == nil then
+           angle_sight_speed = WrapAngle( self.current_angle - self.sight_angle ) * self.angle_blend
+       else
+           angle_sight_speed = WrapAngle( forced_look_at_angle - self.sight_angle ) * self.angle_blend
+       end
+       
        self.sight_angle = WrapAngle( angle_sight_speed + self.sight_angle )
    end
    
@@ -437,6 +462,13 @@ end
 
 function Boid:GoTo( position, move_type )
    self.desired_position = position
+   self.move_type = move_type
+   self.forced_look_at_position = nil
+end
+
+function Boid:GoToAndLookAt( position_to_go, position_to_look_at, move_type )
+   self.desired_position = position_to_go
+   self.forced_look_at_position = position_to_look_at
    self.move_type = move_type
 end
 
@@ -511,11 +543,13 @@ function Boid:draw( i )
 
    love.graphics.origin()
    
-   love.graphics.setColor( 0, 0, 0, 255 )
-   love.graphics.translate( self.current_position.x, self.current_position.y )
-   love.graphics.print( i, 0, 0, 0, 2, 2 )
+   if Boid.ItRendersNumbers then
+       love.graphics.setColor( 0, 0, 0, 255 )
+       love.graphics.translate( self.current_position.x, self.current_position.y )
+       love.graphics.print( i, 0, 0, 0, 2, 2 )
 
-   love.graphics.origin()
+       love.graphics.origin()
+   end
 end
 
 function Boid:StartTrajectoryMode( leader )
@@ -704,4 +738,8 @@ end
 
 function Boid:GetLastTrajectoryIndex()
     return self.trajectory_index
+end
+
+function Boid:IsDummy()
+    return false
 end

@@ -20,8 +20,8 @@ function Coordinator:Initialize()
 	self.group_list = {}
 end
 
-function Coordinator:Register( new_group, leader )
-	table.insert( self.group_list, Group:new( new_group, leader, self ) )
+function Coordinator:Register( new_group, leader, group_id )
+	table.insert( self.group_list, Group:new( new_group, leader, self, group_id ) )
 end
 
 function Coordinator:OnAddToGroup( group_index )
@@ -99,4 +99,8 @@ function Coordinator:GetAllowedArea( region_type_to_avoid )
     end
     
     return allowed_area
+end
+
+function Coordinator:OnGroupAttacking( attacking_group_id, attacked_group_id )
+    self.group_list[ attacked_group_id ]:StartDefenseMode( attacking_group_id, self.group_list[ attacking_group_id ].element_table, self.group_list[ attacking_group_id ].leader )
 end

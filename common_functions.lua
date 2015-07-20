@@ -8,10 +8,10 @@ SEARCH_None, SEARCH_First, SEARCH_New = 0, 1, 2
 LOCOMOTION_Position, LOCOMOTION_Trajectory = 0, 1
 TRAJECTORY_Aiming, TRAJECTORY_Navigating = 0, 1
 TRAJECTORY_POINT_VerySlow, TRAJECTORY_POINT_Slow, TRAJECTORY_POINT_Normal, TRAJECTORY_POINT_Stop = 0, 1, 2, 3
-GROUP_Follow, GROUP_Attack, GROUP_Defense = 0, 1
+GROUP_Follow, GROUP_Attack, GROUP_Defense = 0, 1, 2
 ATTACK_STRATEGY_WaitToSurround, ATTACK_STRATEGY_FollowToSurround = 0, 1
 WAIT_TO_SURROUND_GoToSlots, WAIT_TO_SURROUND_TakePlaces, WAIT_TO_SURROUND_AimAtEnemy, WAIT_TO_SURROUND_TurnTowardEnemy, WAIT_TO_SURROUND_WaitForEnemy, WAIT_TO_SURROUND_Attack = 0, 1, 2, 3, 4, 5
-SURROUND_FindArena, SURROUND_WaitForEnemy, SURROUND_TakePlace, SURROUND_Attack = 0, 1, 2 , 3
+SURROUND_FindArena, SURROUND_WaitForEnemy, SURROUND_TakePlace, SURROUND_InPlace, SURROUND_GetCloser, SURROUND_Attack = 0, 1, 2 , 3
 REGION_TYPE_OpenField, REGION_TYPE_Forest = 0, 1
 
 function WrapAngle( angle )
@@ -42,6 +42,21 @@ function ShallowCopy( orig )
         for orig_key, orig_value in pairs( orig ) do
             copy[ orig_key ] = orig_value
         end
+    else
+        copy = orig
+    end
+    return copy
+end
+
+function DeepCopy( orig )
+    local orig_type = type( orig )
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in next, orig, nil do
+            copy[ DeepCopy( orig_key ) ] = DeepCopy( orig_value )
+        end
+        setmetatable( copy, DeepCopy( getmetatable( orig ) ) )
     else
         copy = orig
     end

@@ -305,3 +305,7 @@ end
 function Player:GetLastTrajectoryIndex()
     return -1
 end
+
+function Player:IsDummy()
+    return false
+end

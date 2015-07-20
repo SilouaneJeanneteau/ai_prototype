@@ -40,9 +40,9 @@ function InitSimulation()
 	CreateBoidInsideArea( 2, defense_boid_count, { center = player.current_position, extent = Vector:new( 100.0, 100.0 ) } )
 
 	coordinator = Coordinator:new( region_list )
-	coordinator:Register( boid_list_list[ 1 ], dummy )
-	coordinator:Register( boid_list_list[ 2 ], player )
-	coordinator.group_list[ 1 ]:StartAttackMode( coordinator.group_list[ 2 ].element_table, coordinator.group_list[ 2 ].leader )
+	coordinator:Register( boid_list_list[ 1 ], dummy, 1 )
+	coordinator:Register( boid_list_list[ 2 ], player, 2 )
+	coordinator.group_list[ 1 ]:StartAttackMode( 2, coordinator.group_list[ 2 ].element_table, coordinator.group_list[ 2 ].leader )
 	coordinator.group_list[ 2 ]:ChangeFormationRadius( 30 )
 
 	CreateRegion( -100, -100, 300, { r = 10, g = 205, b = 25, a = 255 } )

@@ -84,3 +84,7 @@ end
 function Dummy:GetLastTrajectoryIndex()
     return -1
 end
+
+function Dummy:IsDummy()
+    return true
+end
