@@ -77,7 +77,7 @@ Boid.SLOW_TRAJECTROY_MINIMUM_SLOT_TO_DETECT_LEADER = 10
 Boid.SLOW_TRAJECTROY_JOIN_LEADER_ACCELERATION = 0.05
 -------
 
-function Boid:new( x, y )
+function Boid:new( x, y, angle )
    local instance = {}
    setmetatable(instance, self)
    self.__index = self
@@ -100,7 +100,7 @@ function Boid:new( x, y )
    instance.angular_acceleration = 0.3
    instance.uturn_timer = 0.0
    instance.last_angular_speed = 0.0
-   instance.sight_angle = 0.0
+   instance.sight_angle = angle
    instance.action_lock = false
    instance.move_type = MOVE_Idle
    instance.movement_direction = Vector:new( 0, 1 )
@@ -231,18 +231,23 @@ function Boid:ResolveDecision( dt )
    local abs_delta_angle = math.abs( delta_angle )
    local abs_delta_angle_with_last = math.abs( WrapAngle( self.last_input_angle - self.last_desired_angle ) )
 
-   if abs_delta_angle < Boid.ANGLE_MAX then
-      self.desired_action = ACTION_LookFront
-   end
 
-   if abs_delta_angle_with_last > Boid.LAST_ANGLE_BOUND then
-      self.last_desired_angle = self.last_input_angle
+   if self.forced_look_at_position == nil and self.move_type ~= MOVE_Aim then
+       if abs_delta_angle < Boid.ANGLE_MAX then
+          self.desired_action = ACTION_LookFront
+       end
+       
+       if abs_delta_angle_with_last > Boid.LAST_ANGLE_BOUND then
+          self.last_desired_angle = self.last_input_angle
 
-      if abs_delta_angle > Boid.ANGLE_MAX_2 then
-         self.desired_action = ACTION_GoBack
-      elseif abs_delta_angle > Boid.ANGLE_MAX then
-         self.desired_action = ACTION_Turn
-      end
+          if abs_delta_angle > Boid.ANGLE_MAX_2 then
+             self.desired_action = ACTION_GoBack
+          elseif abs_delta_angle > Boid.ANGLE_MAX then
+             self.desired_action = ACTION_Turn
+          end
+       end
+   else
+       self.desired_action = ACTION_LookFront
    end
 
    if not self.action_lock then
@@ -390,6 +395,7 @@ function Boid:ResolveCurrentAction( dt )
 end
 
 function Boid:ResolvePosition( dt )
+   local forced_look_at_angle = self:AngleToForcedLookAtPosition()
    if self.move_type ~= MOVE_Idle then
        local current_delta_angle = WrapAngle( self.desired_angle - self.current_angle )
        local abs_current_delta_angle = math.abs( current_delta_angle )
@@ -413,7 +419,6 @@ function Boid:ResolvePosition( dt )
 
        self.current_angle = WrapAngle( self.current_angle + self.last_angular_speed )
 
-       local forced_look_at_angle = self:AngleToForcedLookAtPosition()
        local angle_sight_speed
        if forced_look_at_angle == nil then
            angle_sight_speed = WrapAngle( self.current_angle - self.sight_angle ) * self.angle_blend
@@ -429,7 +434,7 @@ function Boid:ResolvePosition( dt )
    local old_position = self.current_position
    local movement_direction
    
-   if self.move_type == MOVE_Recal or self.move_type == MOVE_FastRecal then
+   if self.move_type == MOVE_Recal or self.move_type == MOVE_FastRecal or forced_look_at_angle ~= nil then
        movement_direction = ( self.desired_position - self.current_position ):norm()
    else
        movement_direction = ( Vector:new( math.cos( self.current_angle ), math.sin( self.current_angle ) ) + self.velocity_delta ):norm()
@@ -458,6 +463,10 @@ end
 
 function Boid:DistanceToPosition( position )
    return ( position - self.current_position ):r()
+end
+
+function Boid:LookAt( position )
+    self:GoTo( position, MOVE_Aim )
 end
 
 function Boid:GoTo( position, move_type )
@@ -742,4 +751,15 @@ end
 
 function Boid:IsDummy()
     return false
+end
+
+function Boid:ForceAngleToLookAtPosition( target_position )
+    local forced_angle = nil
+    local delta_x = ( target_position.x - self.current_position.x )
+    local delta_y = ( target_position.y - self.current_position.y )
+    
+    if math.abs( delta_x ) > 0.001 or math.abs( delta_y ) > 0.001 then
+        forced_angle = math.atan2( delta_y, delta_x )
+        self.current_angle = forced_angle
+    end
 end

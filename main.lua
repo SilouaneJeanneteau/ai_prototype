@@ -14,6 +14,7 @@ local region_list = {}
 local player
 local coordinator
 local it_can_spawn = true
+local it_can_remove = true
 local dummy = nil
 
 function love.load()
@@ -68,6 +69,8 @@ function love.draw()
     dummy:draw()
 
     player:draw()
+	
+	coordinator:DrawEffects()
 end
 
 function CreateRandomBoid( index, count )
@@ -80,8 +83,7 @@ function CreateBoidInsideArea( index, count, area )
 		table.insert( boid_list_list[ index ], Boid:new(
 			math.random( area.center.x - area.extent.x, area.center.x + area.extent.x ),
 			math.random( area.center.y - area.extent.y, area.center.y + area.extent.y ),
-			math.random( 30 ) - 15,
-			math.random( 30 ) - 15
+			math.random() * 2.0 * math.pi
 			)
 		)
 	end
@@ -105,14 +107,14 @@ function love.update( dt )
 
     local left_mouse_click = love.mouse.isDown( "l" )
     local right_mouse_click = love.mouse.isDown( "r" )
+	local group_index = 2
+	local enemy_group_table = { 1 }
 	if left_mouse_click or right_mouse_click then
-	    local group_index = 2
 		if it_can_spawn and 1 + #boid_list_list[ group_index ] <= Group.MAX_SLOT_PER_CIRCLE then
 			table.insert( boid_list_list[ group_index ], Boid:new(
 				love.mouse.getX(),
 				love.mouse.getY(),
-				math.random( 30 ) - 15,
-				math.random( 30 ) - 15
+				math.random() * 2.0 * math.pi
 				)
 			)
 			
@@ -122,14 +124,29 @@ function love.update( dt )
 			end
 
 			coordinator:OnAddToGroup( group_index )
-			
-			coordinator.group_list[ 1 ]:AddEnemy( boid_list_list[ group_index ][ boid_count ] )
+
+			coordinator.group_list[ 1 ]:OnAddEnemy( boid_list_list[ group_index ][ boid_count ] )
 
 			it_can_spawn = false
 		end
 	else
 		it_can_spawn = true
 	end
+	
+	if love.keyboard.isDown( "p" ) then
+        if it_can_remove then
+            table.remove( boid_list_list[ group_index ], 1 )
+            coordinator:OnRemoveFromGroup( group_index, 1 )
+            
+            for _, enemy_group_index in ipairs( enemy_group_table ) do
+                coordinator:OnRemoveEnemyFromGroup( enemy_group_index, 1 )
+            end
+        end
+        
+        it_can_remove = false
+    else
+        it_can_remove = true
+    end
 
 	if love.keyboard.isDown( "r" ) then
 		InitSimulation()

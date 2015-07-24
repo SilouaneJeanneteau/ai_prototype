@@ -10,9 +10,11 @@ TRAJECTORY_Aiming, TRAJECTORY_Navigating = 0, 1
 TRAJECTORY_POINT_VerySlow, TRAJECTORY_POINT_Slow, TRAJECTORY_POINT_Normal, TRAJECTORY_POINT_Stop = 0, 1, 2, 3
 GROUP_Follow, GROUP_Attack, GROUP_Defense = 0, 1, 2
 ATTACK_STRATEGY_WaitToSurround, ATTACK_STRATEGY_FollowToSurround = 0, 1
+ATTACK_STATE_Waiting, ATTACK_STATE_Going, ATTACK_STATE_Hitting, ATTACK_STATE_Backing = 0, 1, 2, 3
 WAIT_TO_SURROUND_GoToSlots, WAIT_TO_SURROUND_TakePlaces, WAIT_TO_SURROUND_AimAtEnemy, WAIT_TO_SURROUND_TurnTowardEnemy, WAIT_TO_SURROUND_WaitForEnemy, WAIT_TO_SURROUND_Attack = 0, 1, 2, 3, 4, 5
-SURROUND_FindArena, SURROUND_WaitForEnemy, SURROUND_TakePlace, SURROUND_InPlace, SURROUND_GetCloser, SURROUND_Attack = 0, 1, 2 , 3
+SURROUND_FindArena, SURROUND_WaitForEnemy, SURROUND_TakePlace, SURROUND_InPlace, SURROUND_GetCloser, SURROUND_Attack = 0, 1, 2, 3, 4, 5
 REGION_TYPE_OpenField, REGION_TYPE_Forest = 0, 1
+DEFENSE_STATE_Waiting, DEFENSE_STATE_HitBack = 0, 1
 
 function WrapAngle( angle )
    local result = angle

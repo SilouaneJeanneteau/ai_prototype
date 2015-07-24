@@ -38,6 +38,17 @@ Group.ATTACK_MODE_NAVIGATION_CIRCLE_SLOT_COUNT = 32
 Group.ATTACK_MODE_WAITING_ENEMY_SLOT_COUNT = 32
 Group.ATTACK_MODE_ARENA_SIZE = 250.0
 Group.ATTACK_MODE_MIN_PERCENTAGE_ENEMY_INSIDE_ARENA = 0.5
+Group.ATTACK_MODE_MAX_ENEMY_DISTANCE = 200.0
+Group.ATTACK_MODE_MAX_ATTACKED_ENEMY_DISTANCE = 100.0
+Group.ATTACK_MODE_HIT_RENDER_MAX_TIME = 1.2
+Group.ATTACK_MODE_HIT_RENDER_MAX_SIZE = 10.0
+Group.ATTACK_MODE_MIN_ATTACK_TIMER = 2.0
+Group.ATTACK_MODE_COOL_DOWN_ATTACK_TIMER = 5.0
+Group.ATTACK_MODE_SEARCH_NEW_OPPONENT_MAX_TIME = 4.0
+
+-- Defense mode
+Group.DEFENSE_MODE_MIN_LEADER_MOVE_DIST = 150.0
+Group.DEFENSE_MODE_HALF_SIGHT_ANGLE = 40.0
 
 function Group:new( table, new_leader, new_coordinator, new_id )
    local instance = {}
@@ -70,6 +81,7 @@ function Group:new( table, new_leader, new_coordinator, new_id )
    --Fight
    instance.enemy_group_id = -1
    instance.enemy_table = {}
+   instance.opponent_match_table = {}
    
    -- Attack mode
    instance.enemy_formation_circle = { radius = 0.0, center = Vector:new( 0.0, 0.0 ) }
@@ -82,11 +94,16 @@ function Group:new( table, new_leader, new_coordinator, new_id )
    instance.attack_arena_is_moving = false
    instance.attack_arena_speed = 0.0
    instance.navigation_path_point_table = instance:ArrangeSlotsInCircle( Group.ATTACK_MODE_NAVIGATION_CIRCLE_SLOT_COUNT, 4 )
-   instance:ResetStrategyPhase()
+   instance.attack_hit_table = {}
+   instance:ResetAttackStrategyPhase()
    instance:ResetEnemyHandlingTable()
+   instance:ResetAttackState()
    
    -- Defense mode
+   instance.defense_from_attacking_group = {}
    instance.defense_info_table = {}
+   instance.defense_last_group_position = Vector:new( 0.0, 0.0 )
+   instance:ResetDefenseState()
    
    instance.navigation_plan_table = {}
    
@@ -317,29 +334,77 @@ function Group:FindClosestFreeSlot( position )
     return -1
 end
 
-function Group:OnAddElement()
+function Group:OnAddElement( element_index )
+    self.order_table[ element_index ] = element_index
     if self.group_mode == GROUP_Follow then
-        local last_index = #self.element_table  
         for index = 1, #self.last_desired_position_table do
             self.last_desired_position_table[ index ].must_recal = true
             self.element_state_table[ index ] = self.element_state_table[ index ] == SEARCH_First and SEARCH_First or SEARCH_New
         end
 
-        self.last_desired_position_table[ last_index ] = { it_is_enabled = false, last_leader_position = Vector:new( 0.0, 0.0 ), last_formation_type = FORMATION_Grouped, max_distance = Group.SLOW_WALK_DISTANCE_THRESHOLD, must_recal = false, recal_max_distance = ( self.formation_radius * 2 + 1 ) }
-        self.order_table[ last_index ] = last_index
-        self.element_state_table[ last_index ] = SEARCH_First
-        self.element_relative_position_table[ last_index ] = self.element_table[ last_index ].current_position
-        self.line_slot_order_table[ last_index ] = { it_follows = true, slot_index = 0 }
-        self.element_table[ last_index ].trajectory_follows = true
-        self.attack_strategy_phase_table[ last_index ] = { state = WAIT_TO_SURROUND_GoToSlots, timer = -1.0 }
+        self.last_desired_position_table[ element_index ] = { it_is_enabled = false, last_leader_position = Vector:new( 0.0, 0.0 ), last_formation_type = FORMATION_Grouped, max_distance = Group.SLOW_WALK_DISTANCE_THRESHOLD, must_recal = false, recal_max_distance = ( self.formation_radius * 2 + 1 ) }
+        self.element_state_table[ element_index ] = SEARCH_First
+        self.element_relative_position_table[ element_index ] = self.element_table[ element_index ].current_position
+        self.line_slot_order_table[ element_index ] = { it_follows = true, slot_index = 0 }
+        self.element_table[ element_index ].trajectory_follows = true
+        self.attack_strategy_phase_table[ element_index ] = { state = WAIT_TO_SURROUND_GoToSlots, timer = -1.0 }
 
         self:UpdateSearch()
         
         for _, point in ipairs( self.line_following_trail ) do
-            self.element_table[ last_index ]:AddToTrajectory( point )
+            self.element_table[ element_index ]:AddToTrajectory( point )
         end
     elseif self.group_mode == GROUP_Defense then
+        self:SpreadElementsOntoCircle()
+        self.defense_info_table[ element_index ] = { closest_enemy_index = -1 }
+    end
+end
+
+function Group:OnRemoveElement( element_index )
+    if self.group_mode == GROUP_Follow then
+        table.remove( self.last_desired_position_table, self.order_table[ element_index ] )
+        table.remove( self.element_state_table, self.order_table[ element_index ] )
+        table.remove( self.element_relative_position_table, self.order_table[ element_index ] )
+        table.remove( self.line_slot_order_table, self.order_table[ element_index ] )
+        table.remove( self.attack_strategy_phase_table, self.order_table[ element_index ] )
         
+        for _, slot in ipairs( self.slot_table ) do
+            if slot.element_index == element_index then
+                slot.element_index = -1
+                break
+            end
+        end
+
+        self:UpdateSearch()
+    elseif self.group_mode == GROUP_Defense then
+        table.remove( self.defense_info_table, self.order_table[ element_index ] )
+        self:SpreadElementsOntoCircle()
+    end
+    
+    table.remove( self.order_table, #self.order_table )
+end
+
+function Group:OnAddEnemy( enemy_index )
+    if self.group_mode == GROUP_Attack or self.group_mode == GROUP_Defense then
+        table.insert( self.enemy_table, enemy )
+    end
+end
+
+function Group:OnRemoveEnemy( enemy_index )
+    if self.group_mode == GROUP_Attack or self.group_mode == GROUP_Defense then
+        table.remove( self.enemy_table, enemy_index )
+        
+        for _, opponent in ipairs( self.opponent_match_table ) do
+            if opponent == enemy_index then
+                opponent = -1
+            end
+        end
+        
+        for _, defense_info in ipairs( self.defense_info_table ) do
+            if defense.closest_enemy_index == enemy_index then
+                defense.closest_enemy_index = -1
+            end
+        end
     end
 end
 
@@ -468,6 +533,13 @@ function Group:Draw()
     if Group.ItRendersFormationInfos then
         love.graphics.setColor( 255, 255, 128 )
         love.graphics.circle( "line", self.enemy_formation_circle.center.x, self.enemy_formation_circle.center.y, self.enemy_formation_circle.radius, 100 )
+    end
+end
+
+function Group:DrawEffects()
+    love.graphics.setColor( 255, 0, 0 )
+    for _, hit in ipairs( self.attack_hit_table ) do
+        love.graphics.circle( "fill", hit.position.x, hit.position.y, hit.scale, 100 )
     end
 end
 
@@ -753,7 +825,7 @@ function Group:ResetEnemyHandlingTable()
     end
 end
 
-function Group:ResetStrategyPhase()
+function Group:ResetAttackStrategyPhase()
     self.attack_strategy_phase_table = {}
     
     for i = 1, #self.element_table do
@@ -761,9 +833,12 @@ function Group:ResetStrategyPhase()
     end
 end
 
-function Group:AddEnemy( enemy )
-    table.insert( self.enemy_table, enemy )
-    self.enemy_handling_element_table[ #self.enemy_table ] = { closest_position_from_moving_enemy_group = Vector:new( 0.0, 0.0 ), time_since_last_position_computed = -1.0, slot_index = -1 }
+function Group:ResetAttackState()
+    self.attack_state_table = {}
+    
+    for i = 1, #self.element_table do
+        self.attack_state_table[ i ] = { state = ATTACK_STATE_Waiting, attack_timer = 0.0, it_can_attack = false, cool_down_timer = Group.ATTACK_MODE_COOL_DOWN_ATTACK_TIMER, waiting_position = Vector:new( 0.0, 0.0 ) }
+    end
 end
 
 function Group:ApplyAttackFormation( dt )
@@ -782,12 +857,12 @@ function Group:ApplyAttackFormation( dt )
     
             if ( further_away_slot_index ~= -1 and math.abs( self.attack_last_further_away_slot_index - further_away_slot_index ) > 1 ) then
                 self:DispatchSlotsToElements( self.attack_arena.center, self.attack_arena.radius, further_away_slot_index, Group.ATTACK_MODE_WAITING_ENEMY_SLOT_COUNT )
-                self:ResetStrategyPhase()
+                self:ResetAttackStrategyPhase()
                 self.attack_last_further_away_slot_index = further_away_slot_index
                 self.attack_arena_last_position = self.attack_arena.center
             elseif self.attack_arena_last_position:isNearby( 15.0, self.attack_arena.center ) then
                 self:ApplySlotsToRelativePositions()
-                self:ResetStrategyPhase()
+                self:ResetAttackStrategyPhase()
                 self.attack_arena_last_position = self.attack_arena.center
             end
             
@@ -817,7 +892,7 @@ function Group:ApplyAttackFormation( dt )
                         end
                     end
                 elseif self.attack_strategy_phase_table[ self.order_table[ i ] ].state == WAIT_TO_SURROUND_AimAtEnemy then
-                    element:GoTo( self.attack_arena.center, MOVE_Aim )
+                    element:LookAt( self.attack_arena.center )
                     self.attack_strategy_phase_table[ self.order_table[ i ] ].state = WAIT_TO_SURROUND_TurnTowardEnemy
                 elseif self.attack_strategy_phase_table[ self.order_table[ i ] ].state == WAIT_TO_SURROUND_TurnTowardEnemy then
                     if IsAlmostEqual( element.current_angle, element.desired_angle, 0.01 ) then
@@ -845,8 +920,9 @@ function Group:ApplyAttackFormation( dt )
                 self:PlaceElementsAroundCircle()
                 self:PlanNavigationFromTo( self.navigation_path_point_table, self.slot_table )
                 self:ApplyNavigationPlan( self.attack_arena.radius )
-                self:ResetStrategyPhase()
+                self:ResetAttackStrategyPhase()
                 
+                self.coordinator:OnGroupAttacking( self.group_id, self.enemy_group_id )
                 self.attack_surround_state = SURROUND_TakePlace
             end
         elseif self.attack_surround_state == SURROUND_TakePlace then
@@ -886,13 +962,12 @@ function Group:ApplyAttackFormation( dt )
             self.slot_table = to_slot_table
             self:PlanNavigationFromTo( from_slot_table, to_slot_table )
             self:ApplyNavigationPlan( self.attack_arena.radius * 0.8 )
-            self:ResetStrategyPhase()
+            self:ResetAttackStrategyPhase()
             
             for i = 1, #self.element_table do
                 self.attack_strategy_phase_table[ i ].timer = math.random() * 0.7
             end
             
-            self.coordinator:OnGroupAttacking( self.group_id, self.enemy_group_id )
             self.attack_surround_state = SURROUND_GetCloser
         elseif self.attack_surround_state == SURROUND_GetCloser then
             self:FollowPathPlan( dt )
@@ -909,9 +984,11 @@ function Group:ApplyAttackFormation( dt )
             if it_has_someone_left_doing_path_find then
                 self:ApplyNavigationPlan( self.attack_arena.radius * 0.8 )
             else
+                self:MatchElementsToOpponents()
                 self.attack_surround_state = SURROUND_Attack
             end
         elseif self.attack_surround_state == SURROUND_Attack then
+            self:UpdateAttackStrategy( dt )
         end
     elseif self.attack_strategy == ATTACK_STRATEGY_FollowToSurround then
         if self:CheckIfEnemyIsMoving() then
@@ -943,7 +1020,7 @@ function Group:FollowPathPlan( dt )
                         element.current_position = element.desired_position
                         element:Stop()
                         
-                        element:GoTo( self.attack_arena.center, MOVE_Aim )
+                        element:LookAt( self.attack_arena.center )
                         self.attack_strategy_phase_table[ self.order_table[ i ] ].state = WAIT_TO_SURROUND_AimAtEnemy
                     end
                 end
@@ -1139,9 +1216,13 @@ function Group:PlaceElementsAroundCircle( new_slot_count )
     local middle_slot_index = 1
     local slot_to_element_ratio = math.floor( #self.slot_table / #self.element_table )
     
-    for index, slot in ipairs( self.slot_table ) do
-        if slot.element_index == -1 and index < #self.slot_table and self.slot_table[ index + 1 ].element_index ~= -1 then
-            middle_slot_index = ( ( index + half_slot_index - 1 ) % #self.slot_table ) + 1
+    for index = 1, ( #self.slot_table + 1 ) do
+        local current_index = ( index - 1 ) % #self.slot_table + 1
+        local next_index = current_index % #self.slot_table + 1
+        local current_slot = self.slot_table[ current_index ]
+        local next_slot = self.slot_table[ next_index ]
+        if current_slot.element_index == -1 and next_slot.element_index ~= -1 then
+            middle_slot_index = ( ( current_index + half_slot_index - 1 ) % #self.slot_table ) + 1
             break
         end
     end
@@ -1423,18 +1504,217 @@ function Group:CheckIfAllElementsAreWaiting()
     return true
 end
 
+function Group:UpdateOpponentMatches( dt )
+    for i, element in ipairs( self.element_table ) do
+        local opponent = self.opponent_match_table[ self.order_table[ i ] ]
+        
+        if self.attack_state_table[ self.order_table[ i ] ].state == ATTACK_STATE_Waiting then
+            opponent.timer = opponent.timer + dt
+            
+            if opponent.timer >= Group.ATTACK_MODE_SEARCH_NEW_OPPONENT_MAX_TIME then
+                self:FindBestOpponentFor( i )
+            end
+        end
+    end
+end
+
+function Group:UpdateAttackStrategy( dt )
+    self:UpdateOpponentMatches( dt )
+    self:UpdateMacroAttackStrategy( dt )
+    self:UpdateHitTable( dt )
+    
+    for i, element in ipairs( self.element_table ) do
+        if self.opponent_match_table[ self.order_table[ i ] ].index == -1 then
+            if self.attack_state_table[ self.order_table[ i ] ].state == ATTACK_STATE_Waiting then
+                element:LookAt( self.attack_arena.center )
+                self:FindBestOpponentFor( i )
+            else
+                self:GoBackToWaitingState( i )
+            end
+            
+            self.attack_state_table[ self.order_table[ i ] ].it_can_attack = false
+        else
+            local opponent_position = self.enemy_table[ self.opponent_match_table[ self.order_table[ i ] ].index ].current_position
+            local distance_to_opponent = ( opponent_position - element.current_position ):r()
+            
+            if distance_to_opponent <= Group.ATTACK_MODE_MAX_ATTACKED_ENEMY_DISTANCE then
+                self:UpdateElementAttack( i, dt )
+            else
+                if self.attack_state_table[ self.order_table[ i ] ].state == ATTACK_STATE_Waiting then
+                    if distance_to_opponent > Group.ATTACK_MODE_MAX_ENEMY_DISTANCE then
+                        self:FindBestOpponentFor( i )
+                    else
+                        element:LookAt( opponent_position )
+                    end
+                else
+                    self:GoBackToWaitingState( i )
+                end
+
+                self.attack_state_table[ self.order_table[ i ] ].it_can_attack = false
+            end
+        end
+    end
+end
+
+function Group:GoBackToWaitingState( index )
+    local element = self.element_table[ index ]
+    local slot_position = self.attack_state_table[ self.order_table[ index ] ].waiting_position
+    local element_to_slot_distance = ( slot_position - element.current_position ):r()
+    if element_to_slot_distance <= 1.0 then
+        element.current_position = element.desired_position
+        element:Stop()
+        
+        self.attack_state_table[ self.order_table[ index ] ].state = ATTACK_STATE_Waiting
+    end
+end
+
+function Group:UpdateElementAttack( index, dt )
+    local hit_position = 15.0
+    local current_state = self.attack_state_table[ self.order_table[ index ] ].state
+    local enemy_position = self.enemy_table[ self.opponent_match_table[ self.order_table[ index ] ].index ].current_position
+    local element = self.element_table[ index ]
+    local element_to_enemy_vector = ( enemy_position - element.current_position )
+    local element_to_enemy_direction = element_to_enemy_vector:norm()
+    local element_to_enemy_distance = element_to_enemy_vector:r()
+    local target_position = ( element_to_enemy_distance > hit_position ) and ( element.current_position + element_to_enemy_direction * ( element_to_enemy_distance - hit_position ) ) or element.current_position
+    local slot_position = self.attack_state_table[ self.order_table[ index ] ].waiting_position
+    
+    if current_state == ATTACK_STATE_Waiting then
+        if self.attack_state_table[ self.order_table[ index ] ].it_can_attack then
+            self.attack_state_table[ self.order_table[ index ] ].attack_timer = self.attack_state_table[ self.order_table[ index ] ].attack_timer + dt
+            
+            if self.attack_state_table[ self.order_table[ index ] ].attack_timer >= Group.ATTACK_MODE_MIN_ATTACK_TIMER then
+                self.attack_state_table[ self.order_table[ index ] ].waiting_position = math.random() >= 0.5 and element.current_position or target_position
+                self.attack_state_table[ self.order_table[ index ] ].state = ATTACK_STATE_Going
+            end
+        else
+            self.attack_state_table[ self.order_table[ index ] ].attack_timer = 0.0
+        end
+        
+        element:LookAt( enemy_position )
+    elseif current_state == ATTACK_STATE_Going then
+        if element_to_enemy_distance > hit_position then
+            element:GoToAndLookAt( target_position, enemy_position, element_to_enemy_distance > 50.0 and MOVE_Walk or MOVE_FastRecal )
+        else
+            element.current_position = element.desired_position
+            element:Stop()
+            
+            self.attack_state_table[ self.order_table[ index ] ].state = ATTACK_STATE_Hitting
+        end
+    elseif current_state == ATTACK_STATE_Hitting then
+        self:ElementHitsEnemy( index, self.opponent_match_table[ self.order_table[ index ] ].index )
+        self.attack_state_table[ self.order_table[ index ] ].it_can_attack = false
+        self.attack_state_table[ self.order_table[ index ] ].cool_down_timer = 0.0
+        element:GoToAndLookAt( slot_position, enemy_position, MOVE_FastRecal )
+        self.attack_state_table[ self.order_table[ index ] ].state = ATTACK_STATE_Backing
+    elseif current_state == ATTACK_STATE_Backing then
+        local element_to_slot_distance = ( slot_position - element.current_position ):r()
+        if element_to_slot_distance <= 1.0 then
+            element.current_position = element.desired_position
+            element:Stop()
+            
+            element:ForceAngleToLookAtPosition( enemy_position )
+            self.attack_state_table[ self.order_table[ index ] ].state = ATTACK_STATE_Waiting
+        end
+    end
+end
+
+function Group:UpdateMacroAttackStrategy( dt )
+    local max_attacking_element_count = 1
+    local attacking_element_table = {}
+    local attack_candidat_table = {}
+    
+    for i, element_state in ipairs( self.attack_state_table ) do
+        if element_state.it_can_attack then
+            table.insert( attacking_element_table, i )
+        end
+        
+        element_state.cool_down_timer = element_state.cool_down_timer + dt
+    end
+    
+    for i, element in ipairs( self.element_table ) do
+        local opponent_index = self.opponent_match_table[ self.order_table[ i ] ].index
+        if opponent_index ~= -1 then
+            local distance_to_opponent = ( self.enemy_table[ opponent_index ].current_position - element.current_position ):r()
+            
+            if distance_to_opponent < Group.ATTACK_MODE_MAX_ATTACKED_ENEMY_DISTANCE and self.attack_state_table[ self.order_table[ i ] ].cool_down_timer >= Group.ATTACK_MODE_COOL_DOWN_ATTACK_TIMER then
+                table.insert( attack_candidat_table, i )
+            end
+        end
+    end
+    
+    if #attacking_element_table < max_attacking_element_count and #attack_candidat_table > 0 then
+        local random_candidat_index = self.order_table[ attack_candidat_table[ math.random( 1, #attack_candidat_table ) ] ]
+        self.attack_state_table[ random_candidat_index ].it_can_attack = true
+    end
+end
+
+function Group:ElementHitsEnemy( element_index, enemy_index )
+    table.insert( self.attack_hit_table, { position = self.enemy_table[ enemy_index ].current_position, scale = Group.ATTACK_MODE_HIT_RENDER_MAX_SIZE, timer = 0.0 } )
+    self.coordinator:OnElementHittingAnother( self.group_id, element_index, self.enemy_group_id, enemy_index )
+end
+
+function Group:FindBestOpponentFor( element_index )
+    local element = self.element_table[ self.order_table[ element_index ] ]
+    local closest_index = -1
+    local closest_distance = -1
+    
+    for i, enemy in ipairs( self.enemy_table ) do
+        local current_distance = ( enemy.current_position - element.current_position ):r()
+        
+        if current_distance <= Group.ATTACK_MODE_MAX_ENEMY_DISTANCE and ( closest_index == -1 or current_distance < closest_distance ) then
+            closest_index = i
+            closest_distance = current_distance
+        end
+    end
+    
+    self.opponent_match_table[ self.order_table[ element_index ] ] = { index = closest_index, timer = 0.0 }
+end
+
+function Group:MatchElementsToOpponents()
+    self.opponent_match_table = {}
+    for index = 1, #self.element_table do
+        self:FindBestOpponentFor( index )
+    end
+end
+
+function Group:UpdateHitTable( dt )
+    for i = 1, #self.attack_hit_table do
+        local hit = self.attack_hit_table[ i ]
+        
+        hit.timer = hit.timer + dt
+        
+        if hit.timer >= Group.ATTACK_MODE_HIT_RENDER_MAX_TIME then
+            self.attack_hit_table[ i ] = nil
+            i = i - 1
+        else
+            hit.scale = Group.ATTACK_MODE_HIT_RENDER_MAX_SIZE * ( 1.0 - hit.timer / Group.ATTACK_MODE_HIT_RENDER_MAX_TIME )
+        end
+    end
+end
+
+function Group:ElementGivesHitTo( giving_element_index, taking_element_index )
+    print( giving_element_index .. " gives hit to " .. taking_element_index )
+end
+
+function Group:ElementTakesHitFrom( giving_element_index, taking_element_index )
+    --self.defense_state_table[ self.order_table[ taking_element_index ] ].state = DEFENSE_STATE_HitBack
+    --self.defense_state_table[ self.order_table[ taking_element_index ] ].attacking_index = giving_element_index
+end
+
 -- Defense mode
 
-function Group:StartDefenseMode( group_id, group_to_defend_from, group_leader )
+function Group:StartDefenseMode( group_id, group_to_defend_from )
     self:ChangeGroupMode( GROUP_Defense )
     
     self.enemy_group_id = group_id
+    self.defense_from_attacking_group = group_to_defend_from
     
-    for _, enemy in ipairs( group_to_defend_from ) do
+    for _, enemy in ipairs( group_to_defend_from.element_table ) do
         table.insert( self.enemy_table, enemy )
     end
     
-    if group_leader ~= nil and not group_leader:IsDummy() then
+    if group_leader ~= nil and not group_to_defend_from.leader:IsDummy() then
         table.insert( self.enemy_table, group_leader )
     end
     
@@ -1483,41 +1763,114 @@ function Group:SpreadElementsOntoCircle()
             self.element_relative_position_table[ self.order_table[ slot.element_index ] ] = slot.position * minimum_radius
         end
     end
+    
+    self.defense_last_group_position = self.leader.current_position
 end
 
 function Group:ApplyDefenseFormation( dt )
+    self:UpdateCentralPosition( dt )
     self:UpdateElementsOrientation( dt )
     
+    local all_elements_under_threshold = true
+    
     for i, element in ipairs( self.element_table ) do
-        local desired_position = self.leader.current_position + self.element_relative_position_table[ self.order_table[ i ] ]
-        local distance_to_target = ( element.current_position - desired_position ):r()
-        local look_at_position = self.enemy_table[ self.defense_info_table[ self.order_table[ i ] ].closest_enemy_index ].current_position
-        
-        if distance_to_target > 1.0 then
-            element:GoToAndLookAt( desired_position, look_at_position, distance_to_target > 50.0 and MOVE_Walk or MOVE_Recal )
-        else
-            element.current_position = element.desired_position
-            element:Stop()
+        if self.defense_state_table[ self.order_table[ i ] ].state == DEFENSE_STATE_Waiting then
+            local desired_position = self.defense_last_group_position + self.element_relative_position_table[ self.order_table[ i ] ]
+            local distance_to_target = ( element.current_position - desired_position ):r()
+            local look_at_position = self.enemy_table[ self.defense_info_table[ self.order_table[ i ] ].closest_enemy_index ].current_position
+            
+            if distance_to_target > 1.0 then
+                if distance_to_target > 50.0 then
+                    all_elements_under_threshold = false
+                    element:GoTo( desired_position, MOVE_Walk )
+                else
+                    element:GoToAndLookAt( desired_position, look_at_position, MOVE_Recal )
+                end
+            else
+                local forced_angle = nil
+                local delta_x = ( look_at_position.x - element.current_position.x )
+                local delta_y = ( look_at_position.y - element.current_position.y )
+                
+                if math.abs( delta_x ) > 0.001 or math.abs( delta_y ) > 0.001 then
+                    forced_angle = math.atan2( delta_y, delta_x )
+                end
+                
+                if forced_angle ~= nil and IsAlmostEqual( element.sight_angle, forced_angle, 0.01 ) then
+                    element.current_angle = forced_angle
+                    element:Stop()
+                else
+                    element.current_speed = 0.0
+                    element.current_angle = forced_angle ~= nil and forced_angle or element.current_angle
+                    element:LookAt( look_at_position )
+                end
+            end
+        elseif self.defense_state_table[ self.order_table[ i ] ].state == DEFENSE_STATE_HitBack then
+            local enemy_index = self.defense_state_table[ self.order_table[ i ] ].attacking_index
+            
+            if enemy_index ~= -1 then
+                local enemy_position = self.enemy_table[ enemy_index ].current_position
+                element:LookAt( enemy_position )
+            end
         end
+    end
+    
+    if not all_elements_under_threshold then
+        self.defense_last_group_position = self.leader.current_position
     end
 end
 
+function Group:UpdateCentralPosition( dt )    
+    if not self.leader.current_position:isNearby( self.defense_from_attacking_group.attack_arena.radius, self.defense_from_attacking_group.attack_arena.center ) then
+        self:JoiningLeader()
+    end
+end
+
+function Group:JoiningLeader()
+     self.defense_last_group_position = self.leader.current_position
+     self:ResetDefenseState()
+end
+
 function Group:UpdateElementsOrientation( dt )
+    local half_angle = Group.DEFENSE_MODE_HALF_SIGHT_ANGLE * math.pi / 180
     self.defense_info_table = {}
     
     for i, element in ipairs( self.element_table ) do
         local closest_index = -1
         local closest_distance = -1
+        local circle_center_to_element_angle = WrapAngle( ( element.current_position - self.defense_last_group_position ):norm():ang() )
         
         for j, enemy in ipairs( self.enemy_table ) do
-            local current_distance = ( enemy.current_position - element.current_position ):r()
+            local element_to_enemy_angle = WrapAngle( ( enemy.current_position - element.current_position ):norm():ang() )
             
-            if closest_index  == -1 or current_distance < closest_distance then
-                closest_index = j
-                closest_distance = current_distance
+            if ( circle_center_to_element_angle - half_angle ) <= element_to_enemy_angle and ( circle_center_to_element_angle + half_angle ) >= element_to_enemy_angle then
+                local current_distance = WrapAngle( circle_center_to_element_angle - element_to_enemy_angle )
+                
+                if closest_index == -1 or current_distance < closest_distance then
+                    closest_index = j
+                    closest_distance = current_distance
+                end
+            end
+        end
+        
+        if closest_index == -1 then
+            for j, enemy in ipairs( self.enemy_table ) do
+                local current_distance = ( enemy.current_position - element.current_position ):r()
+                
+                if closest_index  == -1 or current_distance < closest_distance then
+                    closest_index = j
+                    closest_distance = current_distance
+                end
             end
         end
         
         self.defense_info_table[ self.order_table[ i ] ] = { closest_enemy_index = closest_index }
+    end
+end
+
+function Group:ResetDefenseState()
+    self.defense_state_table = {}
+    
+    for i = 1, #self.element_table do
+        self.defense_state_table[ i ] = { state = DEFENSE_STATE_Waiting, position = Vector:new( 0.0, 0.0 ), attacking_index = -1 }
     end
 end

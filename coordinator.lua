@@ -25,7 +25,11 @@ function Coordinator:Register( new_group, leader, group_id )
 end
 
 function Coordinator:OnAddToGroup( group_index )
-    self.group_list[ group_index ]:OnAddElement()
+    self.group_list[ group_index ]:OnAddElement( #self.group_list[ group_index ].element_table )
+end
+
+function Coordinator:OnRemoveFromGroup( group_index, element_index )
+    self.group_list[ group_index ]:OnRemoveElement( element_index )
 end
 
 function Coordinator:Update( dt )
@@ -37,6 +41,12 @@ end
 function Coordinator:Draw()
     for _, group in ipairs( self.group_list ) do
 		group:Draw()
+   	end
+end
+
+function Coordinator:DrawEffects()
+    for _, group in ipairs( self.group_list ) do
+		group:DrawEffects()
    	end
 end
 
@@ -102,5 +112,14 @@ function Coordinator:GetAllowedArea( region_type_to_avoid )
 end
 
 function Coordinator:OnGroupAttacking( attacking_group_id, attacked_group_id )
-    self.group_list[ attacked_group_id ]:StartDefenseMode( attacking_group_id, self.group_list[ attacking_group_id ].element_table, self.group_list[ attacking_group_id ].leader )
+    self.group_list[ attacked_group_id ]:StartDefenseMode( attacking_group_id, self.group_list[ attacking_group_id ] )
+end
+
+function Coordinator:OnElementHittingAnother( giving_group_index, giving_element_index, taking_group_index, taking_element_index )
+    self.group_list[ giving_group_index ]:ElementGivesHitTo( giving_element_index, taking_element_index )
+    self.group_list[ taking_group_index ]:ElementTakesHitFrom( giving_element_index, taking_element_index )
+end
+
+function Coordinator:OnRemoveEnemyFromGroup( group_index, enemy_index )
+    self.group_list[ group_index ]:OnRemoveEnemy( enemy_index )
 end
